@@ -6,4 +6,4 @@ __all__ = (
 
 from core.settings import settings
 from core.data_manager import data_helper
-from core.database import db_helper
+# from core.database import db_helper
