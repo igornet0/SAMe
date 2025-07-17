@@ -1,0 +1,102 @@
+/* Дополнительные стили для документации SAMe */
+
+:root {
+  --md-primary-fg-color: #1976d2;
+  --md-primary-fg-color--light: #42a5f5;
+  --md-primary-fg-color--dark: #1565c0;
+  --md-accent-fg-color: #03dac6;
+}
+
+/* Стили для кода */
+.highlight .hll { background-color: #ffffcc }
+.highlight .c { color: #408080; font-style: italic }
+.highlight .k { color: #008000; font-weight: bold }
+.highlight .o { color: #666666 }
+.highlight .cm { color: #408080; font-style: italic }
+.highlight .cp { color: #bc7a00 }
+.highlight .c1 { color: #408080; font-style: italic }
+.highlight .cs { color: #408080; font-style: italic }
+
+/* Стили для адмонишенов */
+.md-typeset .admonition.note {
+  border-color: #448aff;
+}
+
+.md-typeset .admonition.tip {
+  border-color: #00c853;
+}
+
+.md-typeset .admonition.warning {
+  border-color: #ff9100;
+}
+
+.md-typeset .admonition.danger {
+  border-color: #ff5252;
+}
+
+/* Стили для таблиц */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.1rem;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--md-default-fg-color--lightest);
+  font-weight: 700;
+}
+
+/* Стили для навигации */
+.md-nav__title {
+  font-weight: 700;
+}
+
+/* Стили для кнопок */
+.md-button {
+  border-radius: 0.2rem;
+  transition: all 0.2s;
+}
+
+.md-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* Стили для логотипа */
+.md-header__title {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* Стили для поиска */
+.md-search__form {
+  border-radius: 0.2rem;
+}
+
+/* Стили для мобильных устройств */
+@media screen and (max-width: 76.1875em) {
+  .md-nav--primary .md-nav__title {
+    background-color: var(--md-primary-fg-color);
+  }
+}
+
+/* Анимации */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.md-content {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Стили для блоков кода */
+.md-typeset pre > code {
+  border-radius: 0.2rem;
+}
+
+/* Стили для inline кода */
+.md-typeset code {
+  background-color: var(--md-code-bg-color);
+  border-radius: 0.1rem;
+  padding: 0.1rem 0.3rem;
+}

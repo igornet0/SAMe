@@ -1,0 +1,199 @@
+version: '3.8'
+
+services:
+  # Основное приложение SAMe для разработки
+  same-app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: same-app-dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "5678:5678"  # Порт для отладки
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=postgresql+asyncpg://same_user:dev_password@same-db-dev:5432/same_dev_db
+      - REDIS_URL=redis://same-redis-dev:6379/0
+      - API_RELOAD=true
+      - ENABLE_HOT_RELOAD=true
+      - ENABLE_PROFILING=true
+    volumes:
+      - .:/app  # Монтируем весь проект для hot reload
+      - same-dev-data:/app/data
+      - same-dev-models:/app/models
+      - same-dev-logs:/app/logs
+      - /app/__pycache__  # Исключаем кэш Python
+      - /app/.pytest_cache
+    depends_on:
+      - same-db-dev
+      - same-redis-dev
+    networks:
+      - same-dev-network
+    command: >
+      sh -c "
+        python -m spacy download ru_core_news_lg &&
+        uvicorn same.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload --log-level debug
+      "
+
+  # База данных PostgreSQL для разработки
+  same-db-dev:
+    image: postgres:15-alpine
+    container_name: same-db-dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=same_dev_db
+      - POSTGRES_USER=same_user
+      - POSTGRES_PASSWORD=dev_password
+    volumes:
+      - same-dev-postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-dev-db.sql:/docker-entrypoint-initdb.d/init-dev-db.sql
+    ports:
+      - "5433:5432"  # Другой порт чтобы не конфликтовать с локальным PostgreSQL
+    networks:
+      - same-dev-network
+
+  # Redis для разработки
+  same-redis-dev:
+    image: redis:7-alpine
+    container_name: same-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - same-dev-redis-data:/data
+    ports:
+      - "6380:6379"  # Другой порт
+    networks:
+      - same-dev-network
+
+  # Jupyter для экспериментов
+  same-jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyter
+    container_name: same-jupyter
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=same-dev-token
+    volumes:
+      - .:/app
+      - same-dev-notebooks:/app/notebooks
+      - same-dev-data:/app/data
+    networks:
+      - same-dev-network
+    command: >
+      sh -c "
+        pip install jupyter jupyterlab &&
+        python -m spacy download ru_core_news_lg &&
+        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=same-dev-token
+      "
+
+  # pgAdmin для управления базой данных
+  same-pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: same-pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@same.dev
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    volumes:
+      - same-dev-pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - same-db-dev
+    networks:
+      - same-dev-network
+
+  # Redis Commander для управления Redis
+  same-redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: same-redis-commander
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:same-redis-dev:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - same-redis-dev
+    networks:
+      - same-dev-network
+
+  # Mailhog для тестирования email
+  same-mailhog:
+    image: mailhog/mailhog:latest
+    container_name: same-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - same-dev-network
+
+  # Тестовый runner
+  same-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: same-tests
+    restart: "no"
+    environment:
+      - ENVIRONMENT=testing
+      - TEST_DATABASE_URL=postgresql+asyncpg://same_user:dev_password@same-db-dev:5432/same_test_db
+    volumes:
+      - .:/app
+      - same-dev-test-data:/app/tests/data
+    depends_on:
+      - same-db-dev
+      - same-redis-dev
+    networks:
+      - same-dev-network
+    command: >
+      sh -c "
+        python -m pytest tests/ -v --cov=core --cov=backend --cov-report=html --cov-report=term
+      "
+
+  # Документация с MkDocs
+  same-docs:
+    image: squidfunk/mkdocs-material:latest
+    container_name: same-docs
+    restart: unless-stopped
+    ports:
+      - "8080:8000"
+    volumes:
+      - .:/docs
+    networks:
+      - same-dev-network
+    command: mkdocs serve --dev-addr=0.0.0.0:8000
+
+volumes:
+  same-dev-data:
+    driver: local
+  same-dev-models:
+    driver: local
+  same-dev-logs:
+    driver: local
+  same-dev-postgres-data:
+    driver: local
+  same-dev-redis-data:
+    driver: local
+  same-dev-pgadmin-data:
+    driver: local
+  same-dev-notebooks:
+    driver: local
+  same-dev-test-data:
+    driver: local
+
+networks:
+  same-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

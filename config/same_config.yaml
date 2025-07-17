@@ -1,0 +1,264 @@
+# Конфигурация системы поиска аналогов SAMe
+
+# Общие настройки системы
+system:
+  name: "SAMe - Search Analog Model Engine"
+  version: "1.0.0"
+  debug: true
+  log_level: "INFO"
+  
+# Настройки базы данных
+database:
+  url: "postgresql+asyncpg://user:password@localhost/same_db"
+  echo: false
+  pool_size: 10
+  max_overflow: 20
+  
+# Настройки API
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+  workers: 1
+  
+# Пути к данным и моделям
+paths:
+  data_dir: "./data"
+  models_dir: "./models"
+  output_dir: "./data/output"
+  logs_dir: "./logs"
+  temp_dir: "./temp"
+  
+# Настройки предобработки текста
+text_processing:
+  # Очистка текста
+  cleaning:
+    remove_html: true
+    remove_special_chars: true
+    remove_extra_spaces: true
+    remove_numbers: false
+    preserve_technical_terms: true
+    
+  # Лемматизация
+  lemmatization:
+    model_name: "ru_core_news_lg"
+    preserve_technical_terms: true
+    min_token_length: 2
+    preserve_numbers: true
+    
+  # Нормализация
+  normalization:
+    standardize_units: true
+    normalize_abbreviations: true
+    unify_technical_terms: true
+    remove_brand_names: false
+    standardize_numbers: true
+    
+  # Общие настройки предобработки
+  preprocessor:
+    save_intermediate_steps: true
+    batch_size: 1000
+
+# Настройки поискового движка
+search_engine:
+  # Общие настройки
+  default_method: "hybrid"  # fuzzy, semantic, hybrid
+  similarity_threshold: 0.6
+  max_results_per_query: 10
+  enable_parallel_search: true
+  max_workers: 4
+  
+  # Нечеткий поиск
+  fuzzy_search:
+    tfidf_max_features: 10000
+    tfidf_ngram_range: [1, 3]
+    tfidf_min_df: 2
+    tfidf_max_df: 0.95
+    cosine_threshold: 0.3
+    fuzzy_threshold: 60
+    levenshtein_threshold: 70
+    cosine_weight: 0.4
+    fuzzy_weight: 0.3
+    levenshtein_weight: 0.3
+    max_candidates: 100
+    
+  # Семантический поиск
+  semantic_search:
+    model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    embedding_dim: 384
+    index_type: "flat"  # flat, ivf, hnsw
+    nlist: 100
+    nprobe: 10
+    similarity_threshold: 0.5
+    batch_size: 32
+    normalize_embeddings: true
+    use_gpu: false
+    
+  # Гибридный поиск
+  hybrid_search:
+    fuzzy_weight: 0.4
+    semantic_weight: 0.6
+    min_fuzzy_score: 0.5
+    min_semantic_score: 0.4
+    max_candidates_per_method: 50
+    combination_strategy: "weighted_sum"  # weighted_sum, rank_fusion, cascade
+    
+  # Индексация
+  indexing:
+    enable_text_index: true
+    enable_embedding_index: true
+    enable_parameter_index: true
+    enable_category_index: true
+    storage_backend: "sqlite"  # sqlite, memory, file
+    batch_size: 1000
+    enable_parallel_indexing: true
+    enable_cache: true
+    cache_size: 10000
+    enable_incremental_updates: true
+
+# Настройки извлечения параметров
+parameter_extraction:
+  # Общие настройки
+  use_regex: true
+  use_ml: false
+  combination_strategy: "union"  # union, intersection, ml_priority, regex_priority
+  min_confidence: 0.5
+  remove_duplicates: true
+  max_parameters_per_text: 50
+  enable_parallel_processing: true
+  batch_size: 100
+  
+  # ML-извлечение
+  ml_extractor:
+    spacy_model: "ru_core_news_lg"
+    classifier_type: "random_forest"  # random_forest, logistic_regression
+    tfidf_max_features: 5000
+    tfidf_ngram_range: [1, 3]
+    test_size: 0.2
+    random_state: 42
+    min_confidence: 0.6
+    max_parameters_per_text: 20
+    enable_context_features: true
+
+# Настройки экспорта
+export:
+  # Excel экспорт
+  excel:
+    include_statistics: true
+    include_processing_details: true
+    auto_adjust_columns: true
+    add_filters: true
+    highlight_high_similarity: true
+    similarity_threshold: 0.8
+    max_results_per_query: 50
+    
+  # Генерация отчетов
+  reports:
+    include_summary: true
+    include_detailed_results: true
+    include_statistics: true
+    include_visualizations: true
+    include_quality_analysis: true
+    figure_size: [12, 8]
+    dpi: 300
+    style: "whitegrid"
+    high_quality_threshold: 0.8
+    medium_quality_threshold: 0.6
+    language: "ru"
+
+# Настройки производительности
+performance:
+  # Общие настройки
+  enable_multiprocessing: true
+  max_workers: 4
+  batch_size: 1000
+  
+  # Кэширование
+  enable_caching: true
+  cache_size: 10000
+  cache_ttl: 3600  # секунды
+  
+  # Оптимизация памяти
+  memory_limit: "8GB"
+  gc_threshold: 1000
+  
+# Настройки логирования
+logging:
+  version: 1
+  disable_existing_loggers: false
+  
+  formatters:
+    standard:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    detailed:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s"
+      
+  handlers:
+    console:
+      class: "logging.StreamHandler"
+      level: "INFO"
+      formatter: "standard"
+      stream: "ext://sys.stdout"
+      
+    file:
+      class: "logging.handlers.RotatingFileHandler"
+      level: "DEBUG"
+      formatter: "detailed"
+      filename: "./logs/same.log"
+      maxBytes: 10485760  # 10MB
+      backupCount: 5
+      
+  loggers:
+    same:
+      level: "DEBUG"
+      handlers: ["console", "file"]
+      propagate: false
+      
+    core:
+      level: "DEBUG"
+      handlers: ["console", "file"]
+      propagate: false
+      
+    backend:
+      level: "INFO"
+      handlers: ["console", "file"]
+      propagate: false
+      
+  root:
+    level: "INFO"
+    handlers: ["console"]
+
+# Настройки безопасности
+security:
+  secret_key: "your-secret-key-here"
+  algorithm: "HS256"
+  access_token_expire_minutes: 30
+  
+# Настройки мониторинга
+monitoring:
+  enable_metrics: true
+  metrics_port: 9090
+  health_check_interval: 30
+  
+  # Алерты
+  alerts:
+    enable_email_alerts: false
+    email_recipients: []
+    error_threshold: 10
+    response_time_threshold: 5.0
+
+# Настройки разработки
+development:
+  enable_debug_mode: true
+  enable_hot_reload: true
+  enable_profiling: false
+  test_data_size: 1000
+  
+# Настройки продакшена
+production:
+  enable_debug_mode: false
+  enable_hot_reload: false
+  enable_profiling: true
+  workers: 4
+  max_requests: 1000
+  max_requests_jitter: 100
