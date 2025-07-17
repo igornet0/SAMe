@@ -1,0 +1,106 @@
+site_name: SAMe - Search Analog Model Engine
+site_description: Система поиска аналогов материально-технических ресурсов
+site_author: igornet0
+site_url: https://github.com/igornet0/SAMe
+
+repo_name: igornet0/SAMe
+repo_url: https://github.com/igornet0/SAMe
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: ru
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-7
+        name: Переключить на темную тему
+    - scheme: slate
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-4
+        name: Переключить на светлую тему
+  
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.annotate
+    - content.code.copy
+
+plugins:
+  - search:
+      lang: ru
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_toc_entry: false
+            heading_level: 2
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Главная: index.md
+  - Установка: 
+    - Быстрый старт: installation/quick-start.md
+    - Подробная установка: installation/detailed.md
+    - Docker: installation/docker.md
+  - Руководство пользователя:
+    - Введение: user-guide/introduction.md
+    - API: user-guide/api.md
+    - Поиск аналогов: user-guide/search.md
+    - Экспорт результатов: user-guide/export.md
+  - Руководство разработчика:
+    - Архитектура: dev-guide/architecture.md
+    - Настройка окружения: dev-guide/setup.md
+    - Тестирование: dev-guide/testing.md
+    - Вклад в проект: dev-guide/contributing.md
+  - API Reference:
+    - Обзор: api/overview.md
+    - Поиск: api/search.md
+    - Обработка текста: api/text-processing.md
+    - Извлечение параметров: api/parameter-extraction.md
+    - Экспорт: api/export.md
+  - Примеры:
+    - Jupyter Notebooks: examples/notebooks.md
+    - Использование API: examples/api-usage.md
+    - Интеграция: examples/integration.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/igornet0/SAMe
+  version:
+    provider: mike
+
+extra_css:
+  - stylesheets/extra.css
