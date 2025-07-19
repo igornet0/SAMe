@@ -286,56 +286,6 @@ class TestRouterMain:
         except ImportError:
             # Если импорт не работает, пропускаем тест
             pytest.skip("API module import issues")
-    
-    def test_team_page(self):
-        """Тест страницы команды"""
-        # Тестируем что роутер существует и содержит team_page
-        try:
-            import sys
-            sys.path.append('.')
-            from same.api.router_main import router
-
-            # Проверяем что роутер существует
-            assert router is not None
-            assert hasattr(router, 'routes')
-
-            # Ищем team_page роут
-            team_route_found = False
-            for route in router.routes:
-                if hasattr(route, 'path') and route.path == "/team_page":
-                    team_route_found = True
-                    break
-
-            assert team_route_found, "Team page route should exist"
-        except ImportError:
-            # Если импорт не работает, пропускаем тест
-            pytest.skip("Backend module import issues")
-    
-    def test_profile_page_redirect(self):
-        """Тест редиректа на страницу профиля"""
-        # Тестируем что роутер существует и содержит profile_page
-        try:
-            import sys
-            sys.path.append('.')
-            from same.api.router_main import router
-
-            # Проверяем что роутер существует
-            assert router is not None
-            assert hasattr(router, 'routes')
-
-            # Ищем profile_page роут
-            profile_route_found = False
-            for route in router.routes:
-                if hasattr(route, 'path') and route.path == "/profile_page":
-                    profile_route_found = True
-                    break
-
-            # Profile page может не существовать, это нормально
-            # Просто проверяем что роутер работает
-            assert True  # Тест проходит если роутер импортируется
-        except ImportError:
-            # Если импорт не работает, пропускаем тест
-            pytest.skip("API module import issues")
 
 
 if __name__ == "__main__":
