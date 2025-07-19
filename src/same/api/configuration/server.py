@@ -8,15 +8,15 @@ from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import AsyncGenerator
 
-from backend.app.configuration.routers import Routers
-from core import settings
-from core import db_helper
+from same.api.configuration.routers import Routers
+from same import settings
+from same import get_db_helper
 
 class Server:
 
     __app: FastAPI
 
-    # templates = Jinja2Templates(directory="backend/app/front/templates")
+    # templates = Jinja2Templates(directory="same/api/front/templates")
     # pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     # http_bearer = HTTPBearer(auto_error=False)
 
@@ -30,6 +30,7 @@ class Server:
 
     @staticmethod
     async def get_db() -> AsyncGenerator[AsyncSession, None]:
+        db_helper = await get_db_helper()
         async with db_helper.get_session() as session:
             yield session
 
@@ -50,8 +51,6 @@ class Server:
                 "https://localhost:5173",
                 "http://127.0.0.1:5173",    
                 "https://127.0.0.1:5173",    
-                "http://agent-trade.ru",
-                "https://agent-trade.ru"
             ],
             allow_credentials=True,
             allow_methods=["*"],

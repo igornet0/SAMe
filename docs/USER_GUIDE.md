@@ -10,10 +10,10 @@ SAMe (Search Analog Model Engine) - это система поиска анал�
 
 ```bash
 # Запуск через Docker Compose (рекомендуется)
-docker-compose -f docker-compose.dev.yml up -d
+make docker-dev
 
 # Или локальный запуск
-uvicorn backend.app.create_app:create_app --host 0.0.0.0 --port 8000 --reload
+make run
 ```
 
 ### 2. Проверка работоспособности
@@ -387,6 +387,5 @@ curl -X GET "http://localhost:8000/search/search-single/болт%20м10"
 3. Обратитесь к разработчикам
 
 **Контакты:**
-- Email: support@same-system.com
-- GitHub: https://github.com/company/same
-- Документация: https://docs.same-system.com
+- GitHub: https://github.com/igornet0/SAMe
+- Документация: См. файлы в папке docs/

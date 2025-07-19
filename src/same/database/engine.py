@@ -1,7 +1,7 @@
 import asyncio
 import sys
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from sqlalchemy.exc import OperationalError, TimeoutError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker
 )
 
-from core.database.models.main_models import Base
-from core.settings import settings
+from same.database.models.main_models import Base
+from ..settings import get_settings
+
+settings = get_settings()
 
 import logging
 
@@ -99,48 +101,31 @@ class Database:
                 await session.close()
 
     async def _create_tables(self):
-        # from core import data_helper
-        # from backend.Dataset import Indicators
-        # from core.database.orm_query import (orm_add_coin, orm_add_feature, 
-        #                                      orm_get_feature_by_name,
-        #                                      orm_add_feature_argument)
-
+        
         async with self.engine.begin() as conn:
             logger.info("Creating tables")
             await conn.run_sync(Base.metadata.create_all)
 
-        # async with self.async_session() as session:
-        #     for coin in data_helper.coin_list:
-        #         logger.info(f"Adding coin {coin}")
-        #         await orm_add_coin(session, coin)
-
-        #     for indicator_name, iunput_args in Indicators.indicators_input.items():
-
-        #         feature = await orm_get_feature_by_name(session, indicator_name)
-
-        #         if feature:
-        #             continue
-
-        #         logger.info(f"Adding indicator {indicator_name}")
-
-        #         await orm_add_feature(session, indicator_name)
-        #         feature = await orm_get_feature_by_name(session, indicator_name)
-
-        #         for iunput_arg, type in iunput_args.items():
-        #             await orm_add_feature_argument(session, feature.id, iunput_arg, type)
+# Глобальная переменная для db_helper
+db_helper: Optional[Database] = None
 
 # Асинхронная инициализация db_helper
 async def initialize_db_helper():
-    working_url = await select_working_url()
+    global db_helper
+    if db_helper is None:
+        working_url = await select_working_url()
+        db_helper = Database(
+            url=working_url,
+            echo=settings.db.echo,
+            echo_pool=settings.db.echo_pool,
+            pool_size=settings.db.pool_size,
+            max_overflow=settings.db.max_overflow
+        )
+    return db_helper
 
-    return Database(
-        url=working_url,
-        echo=settings.db.echo,
-        echo_pool=settings.db.echo_pool,
-        pool_size=settings.db.pool_size,
-        max_overflow=settings.db.max_overflow
-    )
-
-# Создаем экземпляр db_helper асинхронно
-loop = asyncio.get_event_loop()
-db_helper = loop.run_until_complete(initialize_db_helper())
+# Функция для получения db_helper с ленивой инициализацией
+async def get_db_helper() -> Database:
+    global db_helper
+    if db_helper is None:
+        db_helper = await initialize_db_helper()
+    return db_helper

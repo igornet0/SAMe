@@ -11,7 +11,13 @@ CREATE SCHEMA IF NOT EXISTS same_search;
 CREATE SCHEMA IF NOT EXISTS same_analytics;
 
 -- Настройка поиска по тексту для русского языка
-CREATE TEXT SEARCH CONFIGURATION IF NOT EXISTS russian_unaccent (COPY = russian);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'russian_unaccent') THEN
+        CREATE TEXT SEARCH CONFIGURATION russian_unaccent (COPY = russian);
+    END IF;
+END $$;
+
 ALTER TEXT SEARCH CONFIGURATION russian_unaccent
     ALTER MAPPING FOR word, asciiword WITH unaccent, russian_stem;
 

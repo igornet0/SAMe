@@ -3,6 +3,7 @@
 """
 
 import logging
+import asyncio
 from typing import Dict, List, Tuple, Optional, Any, Union
 from dataclasses import dataclass
 import numpy as np
@@ -12,6 +13,10 @@ import faiss
 import pickle
 from pathlib import Path
 import torch
+import hashlib
+from functools import lru_cache
+
+from ..models import get_model_manager
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +35,7 @@ class SemanticSearchConfig:
     # Пороги схожести
     similarity_threshold: float = 0.5
     top_k_results: int = 10
+    max_results: int = 10  # Alias for top_k_results for notebook compatibility
     
     # Оптимизация
     batch_size: int = 32
@@ -42,61 +48,118 @@ class SemanticSearchEngine:
     
     def __init__(self, config: SemanticSearchConfig = None):
         self.config = config or SemanticSearchConfig()
-        self.model = None
+        self.model_manager = get_model_manager()
+        self._model = None
         self.index = None
         self.documents = []
         self.document_ids = []
         self.embeddings = None
         self.is_fitted = False
-        
-        self._load_model()
+        self._initialized = False
+
+        # Кэш результатов поиска для оптимизации производительности
+        self._search_cache = {}
+        self._cache_max_size = 1000  # Максимальный размер кэша
+
         logger.info("SemanticSearchEngine initialized")
+
+    async def _ensure_model_loaded(self):
+        """Ленивая загрузка модели"""
+        if self._initialized:
+            return
+
+        self._model = await self.model_manager.get_sentence_transformer()
+        self._initialized = True
+        logger.info(f"SemanticSearchEngine model loaded: {self.config.model_name}")
+
+    @property
+    def model(self):
+        """Получение модели (для обратной совместимости)"""
+        if self._model is None:
+            # Синхронная инициализация для обратной совместимости
+            try:
+                loop = asyncio.get_running_loop()
+                task = asyncio.create_task(self._ensure_model_loaded())
+                # Не можем ждать в синхронном контексте, возвращаем None
+                logger.warning("Model not loaded yet, use async methods")
+                return None
+            except RuntimeError:
+                asyncio.run(self._ensure_model_loaded())
+        return self._model
     
-    def _load_model(self):
-        """Загрузка модели sentence-transformers"""
-        try:
-            device = 'cuda' if self.config.use_gpu and torch.cuda.is_available() else 'cpu'
-            self.model = SentenceTransformer(self.config.model_name, device=device)
-            logger.info(f"Loaded model {self.config.model_name} on {device}")
-        except Exception as e:
-            logger.error(f"Error loading model: {e}")
-            raise
-    
-    def fit(self, documents: List[str], document_ids: List[Any] = None):
+    async def fit_async(self, documents: List[str], document_ids: List[Any] = None):
         """
-        Обучение поискового движка на корпусе документов
-        
+        Асинхронное обучение поискового движка на корпусе документов
+
         Args:
             documents: Список текстов для индексации
             document_ids: Список ID документов (опционально)
         """
         if not documents:
             raise ValueError("Documents list cannot be empty")
-        
+
+        await self._ensure_model_loaded()
+
         self.documents = documents
         self.document_ids = document_ids or list(range(len(documents)))
-        
+
         logger.info(f"Generating embeddings for {len(documents)} documents")
-        
+
         # Генерация эмбеддингов
-        self.embeddings = self._generate_embeddings(documents)
-        
+        self.embeddings = await self._generate_embeddings_async(documents)
+
         # Создание FAISS индекса
         self._build_index()
-        
+
         self.is_fitted = True
         logger.info("Semantic search engine fitted successfully")
+
+    def fit(self, documents: List[str], document_ids: List[Any] = None):
+        """
+        Синхронное обучение (для обратной совместимости)
+        """
+        try:
+            loop = asyncio.get_running_loop()
+            return asyncio.create_task(self.fit_async(documents, document_ids))
+        except RuntimeError:
+            return asyncio.run(self.fit_async(documents, document_ids))
     
-    def _generate_embeddings(self, texts: List[str]) -> np.ndarray:
-        """Генерация эмбеддингов для текстов"""
-        embeddings = self.model.encode(
+    async def _generate_embeddings_async(self, texts: List[str]) -> np.ndarray:
+        """Асинхронная генерация эмбеддингов для текстов"""
+        await self._ensure_model_loaded()
+
+        # Выполняем в executor для неблокирующей работы
+        loop = asyncio.get_event_loop()
+        embeddings = await loop.run_in_executor(
+            None, self._generate_embeddings_sync, texts
+        )
+
+        return embeddings.astype(np.float32)
+
+    def _generate_embeddings_sync(self, texts: List[str]) -> np.ndarray:
+        """Синхронная генерация эмбеддингов"""
+        return self._model.encode(
             texts,
             batch_size=self.config.batch_size,
             show_progress_bar=True,
             normalize_embeddings=self.config.normalize_embeddings
         )
-        
-        return embeddings.astype(np.float32)
+
+    def _generate_embeddings(self, texts: List[str]) -> np.ndarray:
+        """Генерация эмбеддингов для текстов (синхронная версия)"""
+        # Для синхронного использования используем синхронный метод
+        if self._model is None:
+            # Синхронная загрузка модели если необходимо
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                # Если есть активный loop, используем синхронную загрузку
+                self._model = self.model_manager.get_sentence_transformer_sync()
+            except RuntimeError:
+                # Если нет активного loop, можем использовать async
+                self._model = asyncio.run(self.model_manager.get_sentence_transformer())
+
+        return self._generate_embeddings_sync(texts)
     
     def _build_index(self):
         """Построение FAISS индекса"""
@@ -131,7 +194,19 @@ class SemanticSearchEngine:
         self.index.add(self.embeddings)
         
         logger.info(f"Built {self.config.index_type} index with {self.index.ntotal} vectors")
-    
+
+    def _get_cache_key(self, query: str, top_k: int) -> str:
+        """Генерация ключа кэша для запроса"""
+        return hashlib.md5(f"{query}:{top_k}".encode()).hexdigest()
+
+    def _manage_cache_size(self):
+        """Управление размером кэша"""
+        if len(self._search_cache) > self._cache_max_size:
+            # Удаляем 20% старых записей (простая стратегия FIFO)
+            keys_to_remove = list(self._search_cache.keys())[:int(self._cache_max_size * 0.2)]
+            for key in keys_to_remove:
+                del self._search_cache[key]
+
     def search(self, query: str, top_k: int = None) -> List[Dict[str, Any]]:
         """
         Семантический поиск
@@ -150,7 +225,13 @@ class SemanticSearchEngine:
             return []
         
         top_k = top_k or self.config.top_k_results
-        
+
+        # Проверяем кэш
+        cache_key = self._get_cache_key(query, top_k)
+        if cache_key in self._search_cache:
+            logger.debug(f"Cache hit for query: {query[:50]}...")
+            return self._search_cache[cache_key]
+
         # Генерация эмбеддинга запроса
         query_embedding = self._generate_embeddings([query])
         
@@ -179,7 +260,11 @@ class SemanticSearchEngine:
                     'rank': i + 1,
                     'index': int(idx)
                 })
-        
+
+        # Сохраняем результат в кэш
+        self._search_cache[cache_key] = results
+        self._manage_cache_size()
+
         return results
     
     def batch_search(self, queries: List[str], top_k: int = None) -> List[List[Dict[str, Any]]]:

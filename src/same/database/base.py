@@ -2,8 +2,15 @@
 from sqlalchemy import MetaData, DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
 
-from core.settings import settings
-from core.utils.case_converter import camel_case_to_snake_case
+from ..settings import get_settings
+
+def camel_case_to_snake_case(name):
+    """Convert CamelCase to snake_case"""
+    import re
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+settings = get_settings()
 
 # создаем базовый класс для всех остальных
 class Base(DeclarativeBase):

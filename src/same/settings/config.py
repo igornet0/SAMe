@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOG_DEFAULT_FORMAT = '[%(asctime)s] %(name)-35s:%(lineno)-3d - %(levelname)-7s - %(message)s'
@@ -28,8 +28,8 @@ class RunConfig(BaseSettings):
     port: int = Field(default=8000)
     reload: bool = Field(default=False)
 
-    celery_broker_url: str = Field(...)
-    celery_result_backend: str = Field(...)
+    celery_broker_url: str = Field(default="redis://localhost:6379/0")
+    celery_result_backend: str = Field(default="redis://localhost:6379/0")
 
     frontend_host: str = Field(default="localhost")
     frontend_port: int = Field(default=5173)
@@ -56,21 +56,25 @@ class LoggingConfig(BaseSettings):
 
 class DatabaseConfig(BaseSettings):
 
-    model_config = SettingsConfigDict(**AppBaseConfig.__dict__, 
-                                      env_prefix="DB__")
-    
-    user: str = Field(default=...)
-    password: str = Field(default=...)
-    host: str = Field(default="localhost")
-    host_alt: str = Field(default="localhost")
-    db_name: str = Field(default="db_name")
-    port: int = Field(default=5432)
+    model_config = SettingsConfigDict(**AppBaseConfig.__dict__)
 
-    echo: bool = Field(default=False)
-    echo_pool: bool = Field(default=False)
-    pool_size: int = Field(default=20)
-    max_overflow: int = 10
-    pool_timeout: int = 30
+    # Support for DATABASE_URL environment variable
+    database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
+    database_url_alt: Optional[str] = Field(default=None, alias="DATABASE_URL_ALT")
+
+    # Individual database parameters (fallback)
+    user: str = Field(default="same_user", alias="DB_USER")
+    password: str = Field(default="same_password", alias="DB_PASSWORD")
+    host: str = Field(default="db", alias="DB_HOST")
+    host_alt: str = Field(default="db", alias="DB_HOST_ALT")
+    db_name: str = Field(default="same_db", alias="DB_NAME")
+    port: int = Field(default=5432, alias="DB_PORT")
+
+    echo: bool = Field(default=False, alias="DB_ECHO")
+    echo_pool: bool = Field(default=False, alias="DB_ECHO_POOL")
+    pool_size: int = Field(default=20, alias="DB_POOL_SIZE")
+    max_overflow: int = Field(default=10, alias="DB_MAX_OVERFLOW")
+    pool_timeout: int = Field(default=30, alias="DB_POOL_TIMEOUT")
 
     naming_convention: dict[str, str] = {
         "ix": "ix_%(column_0_label)s",
@@ -79,11 +83,17 @@ class DatabaseConfig(BaseSettings):
         "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
         "pk": "pk_%(table_name)s",
     }
-    
+
     def get_url(self) -> str:
+        # Use DATABASE_URL if provided, otherwise construct from individual parameters
+        if self.database_url:
+            return self.database_url
         return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.db_name}"
-    
+
     def get_url_alt(self) -> str:
+        # Use DATABASE_URL_ALT if provided, otherwise construct from individual parameters
+        if self.database_url_alt:
+            return self.database_url_alt
         return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host_alt}:{self.port}/{self.db_name}"
 
 
@@ -110,7 +120,8 @@ class PathSettings(BaseSettings):
     logs_dir: Path = Field(default=Path("./logs"))
     temp_dir: Path = Field(default=Path("./temp"))
 
-    @validator("*", pre=True)
+    @field_validator("*", mode="before")
+    @classmethod
     def convert_to_path(cls, v):
         if isinstance(v, str):
             return Path(v)

@@ -1,7 +1,7 @@
 from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from core.database.base import Base
+from same.database.base import Base
 
 class Processe(Base):
 

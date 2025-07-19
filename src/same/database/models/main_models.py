@@ -3,7 +3,7 @@ from typing import List
 from sqlalchemy import ForeignKey, String, BigInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from core.database.base import Base
+from ..base import Base
 
 class User(Base):
 
@@ -15,7 +15,7 @@ class User(Base):
 class ItemParameter(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    item_id: Mapped[int] = mapped_column(ForeignKey("item.id"), nullable=False)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id"), nullable=False)
     parameter_name: Mapped[str] = mapped_column(String(100), nullable=False)
     parameter_value: Mapped[str] = mapped_column(String(500), nullable=True)
 

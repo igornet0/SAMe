@@ -50,7 +50,7 @@ test: ## Запустить тесты
 
 test-cov: ## Запустить тесты с покрытием
 	@echo "$(BLUE)Запуск тестов с покрытием...$(NC)"
-	$(POETRY) run pytest tests/ --cov=core --cov=backend --cov-report=html --cov-report=term
+	$(POETRY) run pytest tests/ --cov=src/same --cov-report=html --cov-report=term
 
 test-unit: ## Запустить только unit тесты
 	@echo "$(BLUE)Запуск unit тестов...$(NC)"

@@ -23,20 +23,23 @@ class FuzzySearchConfig:
     tfidf_ngram_range: Tuple[int, int] = (1, 3)
     tfidf_min_df: int = 2
     tfidf_max_df: float = 0.95
-    
+
     # Пороги схожести
     cosine_threshold: float = 0.3
     fuzzy_threshold: int = 60
     levenshtein_threshold: int = 70
-    
+    similarity_threshold: float = 0.3  # Alias for cosine_threshold for notebook compatibility
+
     # Веса для комбинированного скора
     cosine_weight: float = 0.4
     fuzzy_weight: float = 0.3
     levenshtein_weight: float = 0.3
-    
+
     # Параметры поиска
     max_candidates: int = 100
     top_k_results: int = 10
+    max_results: int = 10  # Alias for top_k_results for notebook compatibility
+    use_stemming: bool = False  # For notebook compatibility
 
 
 class FuzzySearchEngine:
@@ -116,8 +119,13 @@ class FuzzySearchEngine:
         
         # Сортировка и отбор топ-K
         combined_results.sort(key=lambda x: x['combined_score'], reverse=True)
-        
-        return combined_results[:top_k]
+
+        # Добавляем ранги к результатам
+        final_results = combined_results[:top_k]
+        for i, result in enumerate(final_results):
+            result['rank'] = i + 1
+
+        return final_results
     
     def _tfidf_search(self, query: str, max_candidates: int) -> List[Dict[str, Any]]:
         """TF-IDF поиск"""

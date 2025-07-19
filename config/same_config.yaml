@@ -213,13 +213,13 @@ logging:
       level: "DEBUG"
       handlers: ["console", "file"]
       propagate: false
-      
-    core:
-      level: "DEBUG"
+
+    same.api:
+      level: "INFO"
       handlers: ["console", "file"]
       propagate: false
-      
-    backend:
+
+    same.search_engine:
       level: "INFO"
       handlers: ["console", "file"]
       propagate: false

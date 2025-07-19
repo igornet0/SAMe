@@ -1,15 +1,26 @@
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
-from typing import Optional, Literal, Any, Dict, Union
+from typing import Optional, Literal, Any, Dict, Union, List
 import pandas as pd
 import aiofiles
 import json
+from io import StringIO
 import zipfile
 import shutil
 from datetime import datetime
 
 import logging
+
+# Импорты для работы с параметрами
+try:
+    from ..parameter_extraction.regex_extractor import ExtractedParameter
+    from ..parameter_extraction.parameter_utils import ParameterFormatter, ParameterAnalyzer
+except ImportError:
+    # Fallback если модули параметров не доступны
+    ExtractedParameter = None
+    ParameterFormatter = None
+    ParameterAnalyzer = None
 
 logger = logging.getLogger("DataManager")
 
@@ -19,7 +30,7 @@ class SettingsTrade(BaseSettings):
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
     DATA_DIR: Path = BASE_DIR / "data"
 
-    DATASET_DATA_PATH: Path = DATA_DIR / "dataset"
+    DATASET_DATA_PATH: Path = DATA_DIR / "datasets"
 
     LOG_PATH: Path = DATA_DIR / "log"
 
@@ -27,7 +38,6 @@ class SettingsTrade(BaseSettings):
     MODELS_DIR: Path = BASE_DIR / "models"
     MODELS_CONFIGS_PATH: Path = MODELS_DIR / "configs"
     MODELS_LOGS_PATH: Path = MODELS_DIR / "logs"
-    MODEL_PTH_PATH: Path = MODELS_DIR / "models_pth"
 
 class DataManager:
 
@@ -36,12 +46,11 @@ class DataManager:
     def __init__(self):
         self.required_dirs = {
             "data": self.settings.DATA_DIR,
-            "dataset": self.settings.DATASET_DATA_PATH,
+            "datasets": self.settings.DATASET_DATA_PATH,
             "log": self.settings.LOG_PATH,
             "models": self.settings.MODELS_DIR,
             "models logs": self.settings.MODELS_LOGS_PATH,
             "models configs": self.settings.MODELS_CONFIGS_PATH,
-            "models pth": self.settings.MODEL_PTH_PATH,
         }
 
         self._ensure_directories_exist()
@@ -91,7 +100,8 @@ class DataManager:
                 return pd.read_parquet(path)
             elif format == "json":
                 async with aiofiles.open(path, mode="r") as f:
-                    return pd.read_json(await f.read())
+                    json_content = await f.read()
+                    return pd.read_json(StringIO(json_content))
             else:
                 raise ValueError(f"Unsupported format: {format}")
         except FileNotFoundError:
@@ -291,5 +301,144 @@ class DataManager:
         await self.write_file(data, save_path, format="parquet")
         
         return save_path
-    
+
+    async def save_parameters_data(
+        self,
+        data: pd.DataFrame,
+        parameters_column: str = 'extracted_parameters',
+        dataset_name: str = "parameters",
+        version: str = None
+    ) -> Path:
+        """
+        Сохранение данных с извлеченными параметрами
+
+        Args:
+            data: DataFrame с параметрами
+            parameters_column: Название колонки с параметрами
+            dataset_name: Название датасета
+            version: Версия (опционально)
+
+        Returns:
+            Путь к сохраненному файлу
+        """
+        version = version or datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        save_dir = self.settings.DATA_DIR / "processed" / "parameters"
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Сохраняем основные данные
+        main_filename = f"{dataset_name}_{version}.parquet"
+        main_path = save_dir / main_filename
+
+        await self.write_file(data, main_path, format="parquet")
+
+        # Создаем сводку по параметрам если доступны утилиты
+        if ParameterAnalyzer and parameters_column in data.columns:
+            try:
+                # Анализ параметров
+                parameters_list = data[parameters_column].tolist()
+                stats = ParameterAnalyzer.analyze_parameters_batch(parameters_list)
+
+                # Сохраняем статистику
+                stats_filename = f"{dataset_name}_stats_{version}.json"
+                stats_path = save_dir / stats_filename
+
+                async with aiofiles.open(stats_path, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(stats, ensure_ascii=False, indent=2))
+
+                logger.info(f"Parameters statistics saved to {stats_path}")
+
+            except Exception as e:
+                logger.warning(f"Failed to create parameters statistics: {e}")
+
+        logger.info(f"Parameters data saved to {main_path}")
+        return main_path
+
+    def load_parameters_data(
+        self,
+        dataset_name: str,
+        version: str = None
+    ) -> Optional[pd.DataFrame]:
+        """
+        Загрузка данных с параметрами
+
+        Args:
+            dataset_name: Название датасета
+            version: Версия (если не указана, загружается последняя)
+
+        Returns:
+            DataFrame с параметрами или None
+        """
+        try:
+            save_dir = self.settings.DATA_DIR / "processed" / "parameters"
+
+            if version:
+                filename = f"{dataset_name}_{version}.parquet"
+                file_path = save_dir / filename
+            else:
+                # Ищем последнюю версию
+                pattern = f"{dataset_name}_*.parquet"
+                files = list(save_dir.glob(pattern))
+                if not files:
+                    logger.warning(f"No parameters data found for {dataset_name}")
+                    return None
+
+                file_path = max(files, key=lambda x: x.stat().st_mtime)
+
+            if file_path.exists():
+                data = pd.read_parquet(file_path)
+                logger.info(f"Parameters data loaded from {file_path}")
+                return data
+            else:
+                logger.warning(f"Parameters data file not found: {file_path}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error loading parameters data: {e}")
+            return None
+
+    def get_parameters_statistics(
+        self,
+        dataset_name: str,
+        version: str = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Загрузка статистики по параметрам
+
+        Args:
+            dataset_name: Название датасета
+            version: Версия (если не указана, загружается последняя)
+
+        Returns:
+            Словарь со статистикой или None
+        """
+        try:
+            save_dir = self.settings.DATA_DIR / "processed" / "parameters"
+
+            if version:
+                filename = f"{dataset_name}_stats_{version}.json"
+                file_path = save_dir / filename
+            else:
+                # Ищем последнюю версию
+                pattern = f"{dataset_name}_stats_*.json"
+                files = list(save_dir.glob(pattern))
+                if not files:
+                    logger.warning(f"No parameters statistics found for {dataset_name}")
+                    return None
+
+                file_path = max(files, key=lambda x: x.stat().st_mtime)
+
+            if file_path.exists():
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    stats = json.load(f)
+                logger.info(f"Parameters statistics loaded from {file_path}")
+                return stats
+            else:
+                logger.warning(f"Parameters statistics file not found: {file_path}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error loading parameters statistics: {e}")
+            return None
+
 data_helper = DataManager()

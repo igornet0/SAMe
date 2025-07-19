@@ -9,8 +9,8 @@ from fastapi.openapi.docs import (
 from fastapi.responses import JSONResponse
 from starlette.responses import HTMLResponse
 
-from backend.app.configuration.server import Server
-from backend.app.configuration.lifespan import app_lifespan as lifespan
+from same.api.configuration.server import Server
+from same.api.configuration.lifespan import app_lifespan as lifespan
 
 import logging
 
@@ -47,14 +47,14 @@ def create_app(
 ) -> FastAPI:
     
     app = FastAPI(
-        title="Agent", version="1.0.0",
+        title="SAMe Analog Search API", version="1.0.0",
         default_response_class=JSONResponse,
         lifespan=lifespan,
         docs_url=None if create_custom_static_urls else "/docs",
         redoc_url=None if create_custom_static_urls else "/redoc",
     )
 
-    # app.mount("/static", StaticFiles(directory="backend/app/front/static"), name="static")
+    # app.mount("/static", StaticFiles(directory="same/api/front/static"), name="static")
 
     if create_custom_static_urls:
         register_static_docs_routes(app)
@@ -62,3 +62,15 @@ def create_app(
     logger.info("App created")
 
     return Server(app).get_app()
+
+
+def main():
+    """Entry point for running the server via poetry scripts"""
+    import uvicorn
+    uvicorn.run(
+        "same.api.create_app:create_app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+        factory=True
+    )

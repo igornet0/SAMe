@@ -63,7 +63,7 @@ poetry run pre-commit install --hook-type commit-msg
 
 # Создание необходимых директорий
 echo -e "${BLUE}📁 Создание директорий...${NC}"
-mkdir -p data/{input,processed,output} logs temp models/{configs,logs,models_pth}
+mkdir -p data/{input,processed,output} logs temp models/{configs,logs,analog_search}
 
 # Установка SpaCy модели
 echo -e "${BLUE}🧠 Установка SpaCy модели для русского языка...${NC}"

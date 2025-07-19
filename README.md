@@ -25,7 +25,8 @@ SAMe/
 ├── src/same/                      # Основной пакет
 │   ├── api/                       # FastAPI приложение
 │   │   ├── routers/               # API роутеры
-│   │   └── configuration/         # Конфигурация API
+│   │   ├── configuration/         # Конфигурация API
+│   │   └── middleware/            # Middleware компоненты
 │   ├── text_processing/           # Предобработка текста
 │   │   ├── lemmatizer.py          # Лемматизация с SpaCy
 │   │   ├── normalizer.py          # Нормализация текста
@@ -39,16 +40,42 @@ SAMe/
 │   ├── parameter_extraction/      # Извлечение параметров
 │   │   ├── regex_extractor.py     # Regex-извлечение
 │   │   ├── ml_extractor.py        # ML-извлечение
-│   │   └── parameter_parser.py    # Парсинг параметров
+│   │   ├── parameter_parser.py    # Парсинг параметров
+│   │   └── parameter_utils.py     # Утилиты для параметров
 │   ├── export/                    # Экспорт результатов
 │   │   ├── excel_exporter.py      # Excel экспорт
 │   │   └── report_generator.py    # Генерация отчетов
 │   ├── database/                  # База данных
 │   │   ├── models/                # ORM модели
 │   │   ├── orm/                   # ORM операции
-│   │   └── engine.py              # Движок БД
+│   │   ├── base.py                # Базовые модели
+│   │   ├── engine.py              # Движок БД
+│   │   └── optimizations.py       # Оптимизации БД
+│   ├── models/                    # ML модели и управление
+│   │   ├── model_manager.py       # Менеджер моделей
+│   │   ├── memory_monitor.py      # Мониторинг памяти
+│   │   ├── quantization.py        # Квантизация моделей
+│   │   └── exceptions.py          # Исключения моделей
 │   ├── data_manager/              # Управление данными
-│   └── utils/                     # Утилиты
+│   │   └── DataManager.py         # Основной менеджер данных
+│   ├── caching/                   # Кэширование
+│   │   └── advanced_cache.py      # Продвинутое кэширование
+│   ├── monitoring/                # Мониторинг системы
+│   │   └── analytics.py           # Аналитика и метрики
+│   ├── realtime/                  # Реальное время
+│   │   └── streaming.py           # Потоковая обработка
+│   ├── distributed/               # Распределенная обработка
+│   │   └── processor.py           # Распределенный процессор
+│   ├── optimizations/             # Оптимизации производительности
+│   │   ├── integration.py         # Интеграционные оптимизации
+│   │   └── phase3_integration.py  # Фаза 3 интеграции
+│   ├── settings/                  # Настройки системы
+│   │   └── config.py              # Конфигурация
+│   ├── utils/                     # Утилиты
+│   │   ├── case_converter.py      # Конвертер регистра
+│   │   └── configure_logging.py   # Настройка логирования
+│   ├── alembic/                   # Миграции БД
+│   └── analog_search_engine.py    # Главный поисковый движок
 ├── config/                        # Конфигурационные файлы
 ├── docs/                          # Документация
 ├── tests/                         # Тесты
@@ -414,7 +441,7 @@ make docker-logs
 
 ### Переменные окружения
 
-Создайте `.env` файл на основе `.env.example`:
+Создайте `.env` файл для настройки окружения:
 
 ```bash
 # База данных

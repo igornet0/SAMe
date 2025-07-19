@@ -200,10 +200,10 @@ cython_debug/
 data/
 !data/.gitkeep
 models/logs/
-models/models_pth/
-!models/models_pth/.gitkeep
 temp/
 logs/
+cache/
+pgadmin/
 
 # Alembic versions (except template)
 alembic/versions/*.py

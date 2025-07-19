@@ -1,5 +1,5 @@
 # Multi-stage build для оптимизации размера образа
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Установка системных зависимостей для сборки
 RUN apt-get update && apt-get install -y \
@@ -21,10 +21,12 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock ./
 
 # Установка зависимостей
-RUN poetry install --only=main --no-dev
+RUN poetry config virtualenvs.create true && \
+    poetry config virtualenvs.in-project true && \
+    poetry install --only=main --no-root
 
 # Production stage
-FROM python:3.11-slim as production
+FROM python:3.11-slim AS production
 
 # Создание пользователя для безопасности
 RUN groupadd -r same && useradd -r -g same same
@@ -45,7 +47,7 @@ WORKDIR /app
 COPY src/ ./src/
 COPY config/ ./config/
 COPY alembic.ini ./
-COPY .env.example ./.env
+COPY config/.env.example ./.env
 
 # Создание необходимых директорий
 RUN mkdir -p data logs temp models && \
@@ -58,7 +60,7 @@ RUN python -m spacy download ru_core_news_lg
 USER same
 
 # Настройка переменных окружения
-ENV PYTHONPATH="/app/src:$PYTHONPATH"
+ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 

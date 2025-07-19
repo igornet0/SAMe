@@ -58,9 +58,6 @@ graph TB
 git clone https://github.com/igornet0/SAMe.git
 cd SAMe
 
-# Копирование конфигурации
-cp .env.example .env
-
 # Запуск для разработки
 make docker-dev
 
@@ -71,10 +68,7 @@ make docker-prod
 ### Локальная установка
 
 ```bash
-# Установка зависимостей
-make install-dev
-
-# Настройка окружения
+# Установка зависимостей и настройка окружения
 make setup-dev
 
 # Запуск сервера

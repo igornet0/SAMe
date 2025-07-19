@@ -11,10 +11,12 @@ import asyncio
 import time
 
 # Импорты модулей системы
-from core.text_processing import TextPreprocessor, PreprocessorConfig
-from core.search_engine import FuzzySearchEngine, SemanticSearchEngine, HybridSearchEngine
-from core.parameter_extraction import RegexParameterExtractor
-from core.export import ExcelExporter, ExportConfig
+from .text_processing import TextPreprocessor, PreprocessorConfig
+from .search_engine import FuzzySearchEngine, SemanticSearchEngine, HybridSearchEngine
+from .parameter_extraction import RegexParameterExtractor, ParameterParser, ParameterParserConfig
+from .parameter_extraction.parameter_utils import ParameterFormatter, ParameterAnalyzer, ParameterDataFrameUtils
+from .export import ExcelExporter, ExportConfig
+from .data_manager import DataManager
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +51,21 @@ class AnalogSearchEngine:
         
         # Инициализация компонентов
         self.preprocessor = TextPreprocessor(self.config.preprocessor_config)
-        self.parameter_extractor = RegexParameterExtractor()
+
+        # Инициализация парсера параметров
+        parameter_config = ParameterParserConfig(
+            use_regex=self.config.enable_parameter_extraction,
+            use_ml=False,  # ML пока отключен
+            min_confidence=0.5,
+            remove_duplicates=True
+        )
+        self.parameter_parser = ParameterParser(parameter_config)
+
+        # Для обратной совместимости
+        self.parameter_extractor = self.parameter_parser.regex_extractor
+
         self.exporter = ExcelExporter(self.config.export_config)
+        self.data_manager = DataManager()
         
         # Поисковые движки
         self.fuzzy_engine = None
@@ -150,17 +165,35 @@ class AnalogSearchEngine:
     async def _extract_parameters(self):
         """Извлечение параметров из наименований"""
         logger.info("Extracting parameters from catalog items...")
-        
+
         name_column = self._find_name_column(self.catalog_data)
         names = self.catalog_data[name_column].fillna('').astype(str).tolist()
-        
-        # Пакетное извлечение параметров
-        extracted_params = self.parameter_extractor.extract_parameters_batch(names)
-        
+
+        # Пакетное извлечение параметров с использованием улучшенного парсера
+        extracted_params = self.parameter_parser.parse_batch(names)
+
         # Добавляем параметры в DataFrame
         self.processed_catalog['extracted_parameters'] = extracted_params
-        
-        logger.info("Parameter extraction completed")
+
+        # Добавляем дополнительные колонки с параметрами
+        self.processed_catalog = ParameterDataFrameUtils.add_parameters_columns(
+            self.processed_catalog, 'extracted_parameters'
+        )
+
+        # Анализ и логирование статистики
+        stats = ParameterAnalyzer.analyze_parameters_batch(extracted_params)
+        logger.info(f"Parameter extraction completed. Stats: {stats['items_with_parameters']}/{stats['total_items']} items with parameters")
+
+        # Сохраняем данные с параметрами
+        if hasattr(self, 'data_manager'):
+            try:
+                await self.data_manager.save_parameters_data(
+                    self.processed_catalog,
+                    parameters_column='extracted_parameters',
+                    dataset_name='catalog_with_parameters'
+                )
+            except Exception as e:
+                logger.warning(f"Failed to save parameters data: {e}")
     
     async def _initialize_search_engines(self):
         """Инициализация поисковых движков"""
@@ -213,6 +246,14 @@ class AnalogSearchEngine:
         
         # Предобработка запросов
         processed_queries = await self._preprocess_queries(queries)
+
+        # Извлечение параметров из запросов если включено
+        if self.config.enable_parameter_extraction:
+            enhanced_queries = await self._extract_query_parameters(processed_queries)
+            # Извлекаем обработанные запросы для поиска
+            processed_queries = [q['processed_query'] for q in enhanced_queries]
+        else:
+            enhanced_queries = None
         
         # Выполнение поиска
         results = {}
@@ -240,7 +281,33 @@ class AnalogSearchEngine:
         """Предобработка поисковых запросов"""
         processed_results = self.preprocessor.preprocess_batch(queries)
         return [result['final_text'] for result in processed_results]
-    
+
+    async def _extract_query_parameters(self, queries: List[str]) -> List[Dict[str, Any]]:
+        """Извлечение параметров из запросов"""
+        logger.info("Extracting parameters from queries...")
+
+        enhanced_queries = []
+
+        for i, query in enumerate(queries):
+            # Извлекаем параметры из запроса
+            parameters = self.parameter_parser.parse_parameters(query)
+            parameter_dict = self.parameter_parser.extract_parameters_dict(query)
+
+            # Создаем расширенные данные запроса
+            enhanced_query = {
+                'original_query': query,
+                'processed_query': query,
+                'extracted_parameters': parameters,
+                'parameters_dict': parameter_dict,
+                'parameters_formatted': ParameterFormatter.format_parameters_list(parameters),
+                'query_index': i
+            }
+
+            enhanced_queries.append(enhanced_query)
+
+        logger.info(f"Parameters extracted for {len(enhanced_queries)} queries")
+        return enhanced_queries
+
     async def _fuzzy_search(self, queries: List[str]) -> Dict[str, List[Dict[str, Any]]]:
         """Нечеткий поиск"""
         results = {}

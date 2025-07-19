@@ -1,3 +1,3 @@
-__all__ = ("settings",)
+__all__ = ("settings", "get_settings")
 
-from core.settings.config import settings
+from same.settings.config import settings, get_settings

@@ -29,7 +29,7 @@ class Routers:
                 if subdir.is_dir():
                     router_file = subdir / 'router.py'
                     if router_file.exists():
-                        module_name = f'backend.app.routers.{subdir.name}.router'
+                        module_name = f'same.api.routers.{subdir.name}.router'
                         try:
                             module = importlib.import_module(module_name)
                             if hasattr(module, 'router'):
@@ -42,7 +42,7 @@ class Routers:
         except Exception as e:
             logger.error(f"Error discovering routes: {e}")
 
-        from backend.app.router_main import router as main_router
+        from same.api.router_main import router as main_router
         routers.append(main_router)
         
         return tuple(routers)

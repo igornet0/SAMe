@@ -1,0 +1,76 @@
+# Build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+tests/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+temp/
+tmp/
+cache/
+
+# Development files
+notebooks/
+scripts/
+Makefile
+
+# Docker files (exclude from build context)
+docker/
+Dockerfile*
+docker-compose*.yml
+
+# Data directories (should be mounted as volumes)
+data/
+models/
+
+# Keep these essential files for the build
+!pyproject.toml
+!poetry.lock
+!src/
+!config/
+!alembic.ini

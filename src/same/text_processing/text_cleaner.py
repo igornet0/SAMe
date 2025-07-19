@@ -5,7 +5,7 @@
 import re
 import logging
 from typing import Dict, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class CleaningConfig:
     remove_extra_spaces: bool = True
     remove_numbers: bool = False
     preserve_technical_terms: bool = True
-    custom_patterns: List[str] = None
+    custom_patterns: List[str] = field(default_factory=list)
 
 
 class TextCleaner:

@@ -15,8 +15,8 @@
 # Установка через poetry (рекомендуется)
 poetry install
 
-# Или через pip
-pip install -r requirements.txt
+# Или через make
+make install-dev
 ```
 
 ### 2. Установка SpaCy модели для русского языка
@@ -46,7 +46,9 @@ pip install sentence-transformers transformers torch
 
 ```
 SAMe/
-├── core/
+├── src/same/                     # Основная логика SAMe
+│   ├── __init__.py
+│   ├── analog_search_engine.py   # Главный движок поиска аналогов
 │   ├── text_processing/          # Модули предобработки текста
 │   │   ├── __init__.py
 │   │   ├── text_cleaner.py       # Очистка текста
@@ -63,25 +65,60 @@ SAMe/
 │   │   ├── __init__.py
 │   │   ├── regex_extractor.py    # Regex-извлечение
 │   │   ├── ml_extractor.py       # ML-извлечение
-│   │   └── parameter_parser.py   # Парсер параметров
-│   └── export/                   # Экспорт результатов
-│       ├── __init__.py
-│       ├── excel_exporter.py     # Экспорт в Excel
-│       └── report_generator.py   # Генерация отчетов
-├── backend/
-│   ├── same/                     # Основная логика SAMe
-│   │   ├── analog_search_engine.py  # Главный движок
-│   │   └── same_model.py         # Модели данных
-│   └── app/routers/search/       # API endpoints
-│       └── router.py             # REST API
+│   │   ├── parameter_parser.py   # Парсер параметров
+│   │   └── parameter_utils.py    # Утилиты для параметров
+│   ├── export/                   # Экспорт результатов
+│   │   ├── __init__.py
+│   │   ├── excel_exporter.py     # Экспорт в Excel
+│   │   └── report_generator.py   # Генерация отчетов
+│   ├── api/                      # API endpoints
+│   │   ├── __init__.py
+│   │   ├── create_app.py         # Создание FastAPI приложения
+│   │   ├── router_main.py        # Основные роуты
+│   │   ├── configuration/        # Конфигурация API
+│   │   ├── middleware/           # Middleware компоненты
+│   │   └── routers/              # API роутеры
+│   ├── database/                 # Работа с базой данных
+│   │   ├── __init__.py
+│   │   ├── base.py               # Базовые модели
+│   │   ├── engine.py             # Движок БД
+│   │   ├── optimizations.py      # Оптимизации БД
+│   │   ├── models/               # ORM модели
+│   │   └── orm/                  # ORM операции
+│   ├── models/                   # ML модели и управление
+│   │   ├── __init__.py
+│   │   ├── model_manager.py      # Менеджер моделей
+│   │   ├── memory_monitor.py     # Мониторинг памяти
+│   │   ├── quantization.py       # Квантизация моделей
+│   │   └── exceptions.py         # Исключения моделей
+│   ├── data_manager/             # Управление данными
+│   │   ├── __init__.py
+│   │   └── DataManager.py        # Основной менеджер данных
+│   ├── caching/                  # Кэширование
+│   │   └── advanced_cache.py     # Продвинутое кэширование
+│   ├── monitoring/               # Мониторинг системы
+│   │   └── analytics.py          # Аналитика и метрики
+│   ├── realtime/                 # Реальное время
+│   │   └── streaming.py          # Потоковая обработка
+│   ├── distributed/              # Распределенная обработка
+│   │   └── processor.py          # Распределенный процессор
+│   ├── optimizations/            # Оптимизации производительности
+│   │   ├── integration.py        # Интеграционные оптимизации
+│   │   └── phase3_integration.py # Фаза 3 интеграции
+│   ├── settings/                 # Конфигурация
+│   │   ├── __init__.py
+│   │   └── config.py             # Настройки системы
+│   ├── utils/                    # Утилиты
+│   │   ├── __init__.py
+│   │   ├── case_converter.py     # Конвертер регистра
+│   │   └── configure_logging.py  # Настройка логирования
+│   └── alembic/                  # Миграции БД
 ├── data/
 │   ├── input/                    # Входные данные
 │   ├── processed/                # Обработанные данные
-│   ├── embeddings/               # Векторные представления
 │   └── output/                   # Результаты
 ├── models/                       # Сохраненные модели
-│   ├── fuzzy_search_model.pkl
-│   └── semantic_search_model.pkl
+├── config/                       # Конфигурационные файлы
 └── tests/                        # Тесты
     ├── test_text_processing.py
     ├── test_search_engine.py
@@ -159,18 +196,20 @@ format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
 ### 1. Запуск API сервера
 
 ```bash
-# Через uvicorn
-uvicorn backend.app.create_app:create_app --host 0.0.0.0 --port 8000 --reload
+# Через make (рекомендуется)
+make run
 
-# Или через основной скрипт
-python run_app.py
+# Или через uvicorn напрямую
+uvicorn same.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### 2. Инициализация поискового движка
 
 ```python
-from backend.same.analog_search_engine import AnalogSearchEngine
+from same.analog_search_engine import AnalogSearchEngine
+from same.export.excel_exporter import ExcelExporter, ExcelExportConfig
 import pandas as pd
+import asyncio
 
 # Создание движка
 engine = AnalogSearchEngine()
@@ -184,11 +223,21 @@ test_data = pd.DataFrame({
     ]
 })
 
-# Инициализация
-await engine.initialize(test_data)
+# Асинхронная функция для инициализации
+async def main():
+    # Инициализация
+    await engine.initialize(test_data)
 
-# Поиск аналогов
-results = await engine.search_analogs(['болт м10'])
+    # Поиск аналогов
+    results = await engine.search_analogs(['болт м10'])
+
+    # Экспорт результатов
+    config = ExcelExportConfig(include_statistics=True)
+    exporter = ExcelExporter(config)
+    exporter.export_search_results(results, 'results.xlsx')
+
+# Запуск
+asyncio.run(main())
 ```
 
 ### 3. Использование через API
@@ -214,7 +263,7 @@ curl -X POST "http://localhost:8000/search/search-analogs" \
 pytest tests/ -v
 
 # Тесты с покрытием
-pytest tests/ --cov=core --cov=backend --cov-report=html
+pytest tests/ --cov=src/same --cov-report=html
 
 # Тесты конкретного модуля
 pytest tests/test_text_processing.py -v
@@ -241,7 +290,7 @@ test_catalog.to_excel('data/input/test_catalog.xlsx', index=False)
 
 ```python
 # Для больших каталогов (>100K позиций)
-from core.search_engine import SemanticSearchConfig
+from same.search_engine import SemanticSearchConfig
 
 config = SemanticSearchConfig(
     index_type="ivf",  # Использовать IVF индекс
@@ -329,7 +378,7 @@ RUN pip install poetry && poetry install --no-dev
 RUN python -m spacy download ru_core_news_lg
 
 EXPOSE 8000
-CMD ["uvicorn", "backend.app.create_app:create_app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "same.api.create_app:create_app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ### 2. Настройка nginx
