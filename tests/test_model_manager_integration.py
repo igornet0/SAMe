@@ -52,18 +52,21 @@ class TestModelManagerIntegration:
     async def test_spacy_model_loading_mock(self):
         """Тест загрузки SpaCy модели с mock"""
         manager = get_model_manager()
-        
-        with patch('spacy.load') as mock_spacy_load:
+
+        # Очищаем кэш модели перед тестом
+        manager.unload_model("ru_core_news_sm")
+
+        with patch('same.models.model_manager.spacy.load') as mock_spacy_load:
             mock_nlp = Mock()
             mock_nlp.Defaults.stop_words = {"и", "в", "на"}
             mock_spacy_load.return_value = mock_nlp
-            
+
             # Загружаем модель
             model = await manager.get_spacy_model("ru_core_news_sm")
-            
+
             assert model is mock_nlp
             mock_spacy_load.assert_called_once_with("ru_core_news_sm")
-            
+
             # Проверяем, что модель кэширована
             assert "ru_core_news_sm" in manager._models
     
