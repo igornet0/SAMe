@@ -133,10 +133,10 @@ repos:
       # Проверка тестов
       - id: check-test-coverage
         name: Check test coverage
-        entry: pytest --cov=core --cov=backend --cov-fail-under=80 --cov-report=term-missing
+        entry: pytest --cov=src/same --cov-fail-under=80 --cov-report=term-missing
         language: system
         pass_filenames: false
-        files: ^(core|backend|tests)/.*\.py$
+        files: ^(src/same|tests)/.*\.py$
 
 # Конфигурация для конкретных инструментов
 ci:

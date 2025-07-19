@@ -7,13 +7,29 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from core.database import Base, db_helper
+from same.database import Base
+from same.database.engine import select_working_url
+from same import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 section = config.config_ini_section
-config.set_section_option(section, "sqlalchemy.url", db_helper.get_url())
+
+# Получаем URL базы данных синхронно для Alembic
+import asyncio
+try:
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        # Если event loop уже запущен, используем настройки по умолчанию
+        db_url = settings.db.url
+    else:
+        db_url = loop.run_until_complete(select_working_url())
+except RuntimeError:
+    # Если нет event loop, создаем новый
+    db_url = asyncio.run(select_working_url())
+
+config.set_section_option(section, "sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

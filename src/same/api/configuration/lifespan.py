@@ -2,9 +2,9 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-from .tasks import tasks
+# from .tasks import tasks
 from .rabbitmq_server import rabbit
-from core import db_helper
+from same import get_db_helper
 
 import logging
 
@@ -16,6 +16,7 @@ async def app_lifespan(app: FastAPI):
     """Менеджер жизненного цикла приложения"""
     try:
         logger.info("Initializing database...")
+        db_helper = await get_db_helper()
         await db_helper.init_db()
         logger.info("Starting application...")
         # await rabbit.setup_dlx()
@@ -24,6 +25,7 @@ async def app_lifespan(app: FastAPI):
         yield
     finally:
         logger.info("Shutting down application...")
+        db_helper = await get_db_helper()
         await db_helper.dispose()
         # await rabbit.close()
         logger.info("Application shutdown complete")

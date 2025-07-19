@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "same"
-version = "0.1.0"
+version = "0.1.1"
 description = "Search Analog Model Engine - система поиска аналогов МТР"
 authors = ["igornet0 <93836464+igornet0@users.noreply.github.com>"]
 readme = "README.md"
@@ -61,6 +61,13 @@ faiss-cpu = "^1.7.0"
 rapidfuzz = "^3.0.0"
 # Deep learning
 torch = "^2.0.0"
+matplotlib = ">=3.5.0,<3.10.0"
+seaborn = ">=0.11.0,<0.13.0"
+fuzzywuzzy = {extras = ["speedup"], version = "^0.18.0"}
+# System monitoring
+psutil = "^5.9.0"
+# Form data handling
+python-multipart = "^0.0.6"
 
 [tool.poetry.group.dev.dependencies]
 # Development tools
@@ -190,6 +197,3 @@ skips = [
     "B602",  # subprocess_popen_with_shell_equals_true - контролируемое использование
 ]
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"

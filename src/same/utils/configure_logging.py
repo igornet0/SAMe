@@ -1,11 +1,11 @@
 import logging
 from logging.handlers import RotatingFileHandler
-from core.settings import settings
+from same.settings import settings
 
 logging.getLogger('passlib').setLevel(logging.ERROR)
 
 def setup_logging():
-    from core import data_helper
+    from same.data_manager import data_helper
 
     # Очищаем все существующие обработчики
     for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDict]:

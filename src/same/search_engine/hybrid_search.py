@@ -4,7 +4,7 @@
 
 import logging
 from typing import Dict, List, Tuple, Optional, Any, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 class HybridSearchConfig:
     """Конфигурация гибридного поиска"""
     # Конфигурации компонентов
-    fuzzy_config: FuzzySearchConfig = None
-    semantic_config: SemanticSearchConfig = None
+    fuzzy_config: Optional[FuzzySearchConfig] = None
+    semantic_config: Optional[SemanticSearchConfig] = None
     
     # Веса для комбинирования результатов
     fuzzy_weight: float = 0.4
@@ -34,7 +34,9 @@ class HybridSearchConfig:
     # Параметры результатов
     max_candidates_per_method: int = 50
     final_top_k: int = 10
-    
+    max_results: int = 10  # Alias for final_top_k for notebook compatibility
+    similarity_threshold: float = 0.4  # Overall similarity threshold for notebook compatibility
+
     # Стратегия комбинирования
     combination_strategy: str = "weighted_sum"  # weighted_sum, rank_fusion, cascade
     
@@ -124,8 +126,13 @@ class HybridSearchEngine:
         
         # Сортировка и отбор топ-K
         combined_results.sort(key=lambda x: x['hybrid_score'], reverse=True)
-        
-        return combined_results[:top_k]
+
+        # Добавляем ранги к результатам
+        final_results = combined_results[:top_k]
+        for i, result in enumerate(final_results):
+            result['rank'] = i + 1
+
+        return final_results
     
     def _parallel_search(self, query: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """Параллельный поиск в обоих движках"""
@@ -333,7 +340,9 @@ class HybridSearchEngine:
             'combination_strategy': self.config.combination_strategy,
             'weights': {
                 'fuzzy_weight': self.config.fuzzy_weight,
-                'semantic_weight': self.config.semantic_weight
+                'semantic_weight': self.config.semantic_weight,
+                'fuzzy': self.config.fuzzy_weight,  # Alias for notebook compatibility
+                'semantic': self.config.semantic_weight  # Alias for notebook compatibility
             },
             'thresholds': {
                 'min_fuzzy_score': self.config.min_fuzzy_score,

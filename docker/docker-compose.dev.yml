@@ -4,9 +4,9 @@ services:
   # Основное приложение SAMe для разработки
   same-app-dev:
     build:
-      context: .
-      dockerfile: Dockerfile
-      target: development
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
     container_name: same-app-dev
     restart: unless-stopped
     ports:
@@ -22,7 +22,7 @@ services:
       - ENABLE_HOT_RELOAD=true
       - ENABLE_PROFILING=true
     volumes:
-      - .:/app  # Монтируем весь проект для hot reload
+      - ../:/app  # Монтируем весь проект для hot reload
       - same-dev-data:/app/data
       - same-dev-models:/app/models
       - same-dev-logs:/app/logs
@@ -50,7 +50,7 @@ services:
       - POSTGRES_PASSWORD=dev_password
     volumes:
       - same-dev-postgres-data:/var/lib/postgresql/data
-      - ./scripts/init-dev-db.sql:/docker-entrypoint-initdb.d/init-dev-db.sql
+      - ../scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     ports:
       - "5433:5432"  # Другой порт чтобы не конфликтовать с локальным PostgreSQL
     networks:
@@ -72,8 +72,9 @@ services:
   # Jupyter для экспериментов
   same-jupyter:
     build:
-      context: .
-      dockerfile: Dockerfile.jupyter
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
     container_name: same-jupyter
     restart: unless-stopped
     ports:
@@ -82,7 +83,7 @@ services:
       - JUPYTER_ENABLE_LAB=yes
       - JUPYTER_TOKEN=same-dev-token
     volumes:
-      - .:/app
+      - ../:/app
       - same-dev-notebooks:/app/notebooks
       - same-dev-data:/app/data
     networks:
@@ -139,16 +140,16 @@ services:
   # Тестовый runner
   same-tests:
     build:
-      context: .
-      dockerfile: Dockerfile
-      target: development
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
     container_name: same-tests
     restart: "no"
     environment:
       - ENVIRONMENT=testing
       - TEST_DATABASE_URL=postgresql+asyncpg://same_user:dev_password@same-db-dev:5432/same_test_db
     volumes:
-      - .:/app
+      - ../:/app
       - same-dev-test-data:/app/tests/data
     depends_on:
       - same-db-dev
@@ -157,7 +158,7 @@ services:
       - same-dev-network
     command: >
       sh -c "
-        python -m pytest tests/ -v --cov=core --cov=backend --cov-report=html --cov-report=term
+        python -m pytest tests/ -v --cov=src/same --cov-report=html --cov-report=term
       "
 
   # Документация с MkDocs
@@ -168,7 +169,7 @@ services:
     ports:
       - "8080:8000"
     volumes:
-      - .:/docs
+      - ../:/docs
     networks:
       - same-dev-network
     command: mkdocs serve --dev-addr=0.0.0.0:8000

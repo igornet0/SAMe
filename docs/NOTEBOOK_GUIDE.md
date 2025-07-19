@@ -70,11 +70,11 @@
 
 ```
 SAMe/
-├── core/
+├── src/same/
 │   ├── text_processing/
 │   │   ├── text_cleaner.py
 │   │   ├── lemmatizer.py
-│   │   ├── text_normalizer.py
+│   │   ├── normalizer.py
 │   │   └── preprocessor.py
 │   ├── search_engine/
 │   │   ├── fuzzy_search.py
@@ -84,13 +84,20 @@ SAMe/
 │   ├── parameter_extraction/
 │   │   ├── regex_extractor.py
 │   │   ├── ml_extractor.py
-│   │   └── parameter_parser.py
-│   └── export/
-│       ├── excel_exporter.py
-│       └── report_generator.py
+│   │   ├── parameter_parser.py
+│   │   └── parameter_utils.py
+│   ├── export/
+│   │   ├── excel_exporter.py
+│   │   └── report_generator.py
+│   ├── models/
+│   │   ├── model_manager.py
+│   │   └── memory_monitor.py
+│   ├── data_manager/
+│   │   └── DataManager.py
+│   └── analog_search_engine.py
 ├── data/
 │   └── output/
-├── SAMe_Demo.ipynb
+├── notebooks/demo/SAMe_Demo.ipynb
 └── docs/
 ```
 
@@ -127,7 +134,7 @@ jupyter lab SAMe_Demo.ipynb
 
 #### Проблема: Ошибка импорта модулей SAMe
 ```
-ImportError: No module named 'core.text_processing'
+ImportError: No module named 'same.text_processing'
 ```
 **Решение**: Убедитесь что все модули созданы в соответствующих директориях
 

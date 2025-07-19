@@ -4,7 +4,7 @@
 
 import logging
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import pandas as pd
 
 from .text_cleaner import TextCleaner, CleaningConfig
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PreprocessorConfig:
     """Общая конфигурация предобработчика"""
-    cleaning_config: CleaningConfig = None
-    lemmatizer_config: LemmatizerConfig = None
-    normalizer_config: NormalizerConfig = None
+    cleaning_config: Optional[CleaningConfig] = None
+    lemmatizer_config: Optional[LemmatizerConfig] = None
+    normalizer_config: Optional[NormalizerConfig] = None
     save_intermediate_steps: bool = True
     batch_size: int = 1000
 
@@ -84,35 +84,66 @@ class TextPreprocessor:
     
     def preprocess_batch(self, texts: List[str]) -> List[Dict[str, Any]]:
         """
-        Пакетная предобработка текстов
-        
+        Пакетная предобработка текстов (синхронная версия для обратной совместимости)
+
         Args:
             texts: Список текстов для обработки
-            
+
         Returns:
             Список результатов обработки
         """
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            # Если есть активный event loop, создаем задачу
+            return asyncio.create_task(self.preprocess_batch_async(texts))
+        except RuntimeError:
+            # Если нет активного loop, создаем новый
+            return asyncio.run(self.preprocess_batch_async(texts))
+
+    async def preprocess_batch_async(self, texts: List[str]) -> List[Dict[str, Any]]:
+        """
+        Асинхронная пакетная предобработка текстов с оптимизацией производительности
+
+        Args:
+            texts: Список текстов для обработки
+
+        Returns:
+            Список результатов обработки
+        """
+        if not texts:
+            return []
+
         results = []
         batch_size = self.config.batch_size
-        
+        total_batches = (len(texts) - 1) // batch_size + 1
+
+        logger.info(f"Starting async batch processing: {len(texts)} texts in {total_batches} batches")
+
         # Обрабатываем батчами для оптимизации памяти
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
-            logger.info(f"Processing batch {i//batch_size + 1}/{(len(texts)-1)//batch_size + 1}")
-            
+            batch_num = i // batch_size + 1
+
+            logger.debug(f"Processing batch {batch_num}/{total_batches} ({len(batch)} texts)")
+
             try:
-                # Этап 1: Очистка батча
+                # Параллельная обработка этапов где возможно
+                import asyncio
+
+                # Этап 1: Очистка батча (синхронная, но быстрая)
                 cleaning_results = self.cleaner.clean_batch(batch)
                 cleaned_texts = [r['normalized'] for r in cleaning_results]
-                
-                # Этап 2: Нормализация батча
+
+                # Этап 2: Нормализация батча (синхронная, но быстрая)
                 normalization_results = self.normalizer.normalize_batch(cleaned_texts)
                 normalized_texts = [r['final_normalized'] for r in normalization_results]
-                
-                # Этап 3: Лемматизация батча
-                lemmatization_results = self.lemmatizer.lemmatize_batch(normalized_texts)
-                
+
+                # Этап 3: Лемматизация батча (асинхронная, самая медленная)
+                lemmatization_results = await self.lemmatizer.lemmatize_batch_async(normalized_texts)
+
                 # Объединяем результаты
+                batch_results = []
                 for j, original_text in enumerate(batch):
                     result = {
                         'original': original_text,
@@ -122,11 +153,18 @@ class TextPreprocessor:
                         'final_text': lemmatization_results[j]['lemmatized'],
                         'processing_successful': True
                     }
-                    result['stats'] = self._calculate_stats(result)
-                    results.append(result)
-                    
+
+                    # Добавляем статистику только если требуется
+                    if self.config.save_intermediate_steps:
+                        result['stats'] = self._calculate_stats(result)
+
+                    batch_results.append(result)
+
+                results.extend(batch_results)
+                logger.debug(f"Batch {batch_num} completed successfully")
+
             except Exception as e:
-                logger.error(f"Error processing batch {i//batch_size + 1}: {e}")
+                logger.error(f"Error processing batch {batch_num}: {e}")
                 # Добавляем результаты с ошибками
                 for text in batch:
                     results.append({
@@ -135,7 +173,8 @@ class TextPreprocessor:
                         'processing_successful': False,
                         'error': str(e)
                     })
-        
+
+        logger.info(f"Async batch processing completed: {len(results)} results")
         return results
     
     def preprocess_dataframe(self, df: pd.DataFrame, text_column: str, 

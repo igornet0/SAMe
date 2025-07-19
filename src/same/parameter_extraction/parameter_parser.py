@@ -51,7 +51,7 @@ class ParameterParser:
         
         if self.config.use_regex:
             self.regex_extractor = RegexParameterExtractor()
-            logger.info("Regex extractor initialized")
+            logger.info(f"Regex extractor initialized with {len(self.regex_extractor.patterns)} patterns")
         
         if self.config.use_ml:
             self.ml_extractor = MLParameterExtractor(self.config.ml_config)
@@ -387,9 +387,58 @@ class ParameterParser:
         df_result[output_column] = results
         
         return df_result
-    
-    def train_ml_extractor(self, 
-                          texts: List[str], 
+
+    def extract_parameters_dict(self, text: str) -> Dict[str, Any]:
+        """
+        Извлечение параметров в виде словаря для удобного использования
+
+        Args:
+            text: Входной текст
+
+        Returns:
+            Словарь с параметрами, сгруппированными по типам
+        """
+        parameters = self.parse_parameters(text)
+
+        result = {
+            'raw_parameters': parameters,
+            'parameters_by_type': {},
+            'parameters_summary': {
+                'total_count': len(parameters),
+                'types_found': set(),
+                'confidence_avg': 0.0
+            }
+        }
+
+        if not parameters:
+            return result
+
+        # Группировка по типам
+        for param in parameters:
+            param_type = param.parameter_type.value
+            if param_type not in result['parameters_by_type']:
+                result['parameters_by_type'][param_type] = []
+
+            result['parameters_by_type'][param_type].append({
+                'name': param.name,
+                'value': param.value,
+                'unit': param.unit,
+                'confidence': param.confidence,
+                'source_text': param.source_text
+            })
+
+            result['parameters_summary']['types_found'].add(param_type)
+
+        # Средняя уверенность
+        if parameters:
+            result['parameters_summary']['confidence_avg'] = sum(p.confidence for p in parameters) / len(parameters)
+
+        result['parameters_summary']['types_found'] = list(result['parameters_summary']['types_found'])
+
+        return result
+
+    def train_ml_extractor(self,
+                          texts: List[str],
                           annotations: List[List[Dict[str, Any]]]) -> Dict[str, Any]:
         """
         Обучение ML-экстрактора

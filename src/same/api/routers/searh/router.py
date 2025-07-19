@@ -10,9 +10,9 @@ from pydantic import BaseModel
 import pandas as pd
 import io
 
-from core import settings
-from backend.app.configuration import (Server, )
-from backend.same.analog_search_engine import AnalogSearchEngine, AnalogSearchConfig
+from same import settings
+from same.api.configuration import (Server, )
+from same.analog_search_engine import AnalogSearchEngine, AnalogSearchConfig
 
 import logging
 

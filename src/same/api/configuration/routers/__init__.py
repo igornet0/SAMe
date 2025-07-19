@@ -1,3 +1,3 @@
 __all__ = ("Routers",)
 
-from backend.app.configuration.routers.routers import Routers
+from same.api.configuration.routers.routers import Routers
