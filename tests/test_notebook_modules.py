@@ -7,8 +7,7 @@ import sys
 import os
 from pathlib import Path
 
-# Добавляем путь к модулям
-sys.path.append(os.path.abspath('.'))
+# Путь к модулям настроен через poetry/pip install
 
 def test_imports():
     """Тестирует импорты всех модулей"""

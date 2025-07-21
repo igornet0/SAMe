@@ -6,8 +6,7 @@ Test the exact TextNormalizer cell from the fixed SAMe_Demo.ipynb notebook
 import sys
 import os
 
-# Add path to modules
-sys.path.append(os.path.abspath('.'))
+# Path to modules configured through poetry/pip install
 
 def test_exact_notebook_cell():
     """Test the exact code from the fixed notebook cell"""

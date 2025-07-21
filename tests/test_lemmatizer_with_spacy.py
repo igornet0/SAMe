@@ -6,8 +6,7 @@ Test the Lemmatizer functionality with the installed SpaCy model
 import sys
 import os
 
-# Add path to modules
-sys.path.append(os.path.abspath('.'))
+# Path to modules configured through poetry/pip install
 
 def test_spacy_model_basic():
     """Test that SpaCy model works correctly"""

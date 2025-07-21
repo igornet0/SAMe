@@ -76,7 +76,11 @@ class MemoryMonitor:
             if self._monitoring_thread and self._monitoring_thread.is_alive():
                 self._stop_monitoring.set()
                 self._monitoring_thread.join(timeout=5.0)
-                logger.info("Memory monitoring stopped")
+                if self._monitoring_thread.is_alive():
+                    logger.warning("Memory monitoring thread did not stop gracefully")
+                else:
+                    logger.info("Memory monitoring stopped")
+            self._monitoring_thread = None
     
     def get_memory_stats(self) -> MemoryStats:
         """Получение текущей статистики памяти"""

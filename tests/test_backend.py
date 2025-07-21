@@ -277,7 +277,7 @@ class TestRouterMain:
         # Тестируем что функция read_root существует и может быть импортирована
         try:
             import sys
-            sys.path.append('.')
+            # Path configured through poetry/pip install
             from same.api.router_main import read_root
 
             # Проверяем что функция существует

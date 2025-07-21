@@ -122,11 +122,16 @@ SAMe/
 git clone https://github.com/igornet0/SAMe.git
 cd SAMe
 
-# Запуск для разработки
-make docker-dev
+# Быстрый запуск для разработки (с кэшем)
+./scripts/quick-start.sh
 
-# Или для продакшена
-make docker-prod
+# Или полный запуск с опциями
+./scripts/start-docker.sh dev cache      # Быстро, с кэшем
+./scripts/start-docker.sh dev no-cache   # Медленно, без кэша
+./scripts/start-docker.sh dev rebuild    # Пересборка измененных
+
+# Для продакшена
+./scripts/start-docker.sh prod
 ```
 
 ### Локальная установка
@@ -429,14 +434,26 @@ make ci-test
 ### Docker деплой
 
 ```bash
-# Продакшн сборка
-make docker-build
+# Быстрый запуск для разработки
+./scripts/quick-start.sh
 
-# Запуск в продакшне
-make docker-prod
+# Полный запуск с опциями сборки
+./scripts/start-docker.sh [режим] [опция_сборки]
 
-# Просмотр логов
-make docker-logs
+# Режимы:
+#   dev/development - режим разработки (все сервисы)
+#   prod/production - режим продакшена (оптимизированный)
+#   basic          - базовая конфигурация (минимум сервисов)
+
+# Опции сборки:
+#   cache    - использовать кэш Docker (быстро, по умолчанию)
+#   no-cache - пересобрать без кэша (медленно, но свежее)
+#   rebuild  - пересобрать только измененные сервисы
+
+# Примеры:
+./scripts/start-docker.sh dev cache      # Быстрая разработка
+./scripts/start-docker.sh prod no-cache  # Чистая продакшн сборка
+./scripts/start-docker.sh basic rebuild  # Базовая с обновлениями
 ```
 
 ### Переменные окружения

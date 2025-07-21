@@ -21,12 +21,16 @@ services:
       - API_RELOAD=true
       - ENABLE_HOT_RELOAD=true
       - ENABLE_PROFILING=true
+      - MPLCONFIGDIR=/tmp/matplotlib
+      - TRANSFORMERS_CACHE=/app/models/transformers
+      - SENTENCE_TRANSFORMERS_HOME=/app/models/sentence_transformers
     volumes:
       - ../:/app  # Монтируем весь проект для hot reload
       - same-dev-data:/app/data
       - same-dev-models:/app/models
       - same-dev-logs:/app/logs
       - /app/__pycache__  # Исключаем кэш Python
+      - /app/.venv  # Исключаем виртуальное окружение
       - /app/.pytest_cache
     depends_on:
       - same-db-dev
@@ -35,8 +39,7 @@ services:
       - same-dev-network
     command: >
       sh -c "
-        python -m spacy download ru_core_news_lg &&
-        uvicorn same.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload --log-level debug
+        /app/.venv/bin/uvicorn same.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload --log-level debug --factory
       "
 
   # База данных PostgreSQL для разработки
@@ -91,7 +94,6 @@ services:
     command: >
       sh -c "
         pip install jupyter jupyterlab &&
-        python -m spacy download ru_core_news_lg &&
         jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=same-dev-token
       "
 
@@ -161,18 +163,43 @@ services:
         python -m pytest tests/ -v --cov=src/same --cov-report=html --cov-report=term
       "
 
+  # Frontend React приложение для разработки
+  same-frontend-dev:
+    build:
+      context: ../frontend/same-frontend
+      dockerfile: Dockerfile.dev
+    container_name: same-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:8000
+      - REACT_APP_MAX_FILE_SIZE=52428800
+      - REACT_APP_ENVIRONMENT=development
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ../frontend/same-frontend:/app
+      - /app/node_modules
+    depends_on:
+      - same-app-dev
+    networks:
+      - same-dev-network
+
   # Документация с MkDocs
   same-docs:
-    image: squidfunk/mkdocs-material:latest
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
     container_name: same-docs
     restart: unless-stopped
     ports:
       - "8080:8000"
     volumes:
-      - ../:/docs
+      - ../docs:/docs
+      - ../src:/docs/src  # Монтируем исходный код для mkdocstrings
     networks:
       - same-dev-network
-    command: mkdocs serve --dev-addr=0.0.0.0:8000
+    working_dir: /docs
 
 volumes:
   same-dev-data:
