@@ -1,0 +1,38 @@
+# Development Dockerfile для React приложения
+FROM node:18-alpine
+
+# Установка curl для health check
+RUN apk add --no-cache curl
+
+# Установка рабочей директории
+WORKDIR /app
+
+# Установка глобальных зависимостей
+RUN npm install -g nodemon
+
+# Копирование package.json и package-lock.json
+COPY package*.json ./
+
+# Установка зависимостей
+RUN npm install
+
+# Копирование исходного кода
+COPY . .
+
+# Создание пользователя для разработки
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001 && \
+    chown -R nextjs:nodejs /app
+
+# Переключение на пользователя
+USER nextjs
+
+# Экспорт порта
+EXPOSE 3000
+
+# Проверка здоровья
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000 || exit 1
+
+# Запуск в режиме разработки
+CMD ["npm", "start"]

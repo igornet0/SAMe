@@ -1,0 +1,60 @@
+{
+  "name": "same-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@testing-library/jest-dom": "^5.16.4",
+    "@testing-library/react": "^13.3.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.11.47",
+    "@types/react": "^18.0.15",
+    "@types/react-dom": "^18.0.6",
+    "axios": "^1.7.9",
+    "lucide-react": "^0.468.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-dropzone": "^14.3.5",
+    "react-scripts": "5.0.1",
+    "typescript": "^4.7.4",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "test:coverage": "react-scripts test --coverage --watchAll=false",
+    "test:ci": "react-scripts test --coverage --watchAll=false --ci",
+    "test:accessibility": "react-scripts test --testPathPattern=accessibility.test.tsx --watchAll=false",
+    "test:integration": "react-scripts test --testPathPattern=integration.test.tsx --watchAll=false",
+    "test:unit": "react-scripts test --testPathPattern=__tests__ --watchAll=false",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/axios": "^0.14.4",
+    "@types/react-dropzone": "^5.1.0",
+    "autoprefixer": "^10.4.20",
+    "jest-axe": "^9.0.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^3.4.17"
+  }
+}
