@@ -3,6 +3,10 @@ site_description: Система поиска аналогов материал�
 site_author: igornet0
 site_url: https://github.com/igornet0/SAMe
 
+# Настройка директорий
+docs_dir: docs
+site_dir: site
+
 repo_name: igornet0/SAMe
 repo_url: https://github.com/igornet0/SAMe
 edit_uri: edit/main/docs/

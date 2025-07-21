@@ -6,9 +6,7 @@ Test the exact import cells from SAMe_Demo.ipynb notebook
 import sys
 import os
 
-# Add path to modules
-sys.path.append(os.path.abspath('.'))
-sys.path.append(os.path.abspath('./src'))
+# Paths to modules configured through poetry/pip install
 
 def test_notebook_import_cells():
     """Test all import cells from the notebook"""

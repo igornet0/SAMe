@@ -49,12 +49,12 @@ COPY config/ ./config/
 COPY alembic.ini ./
 COPY config/.env.example ./.env
 
+# Установка SpaCy модели (до переключения пользователя)
+# RUN python -m spacy download ru_core_news_lg
+
 # Создание необходимых директорий
 RUN mkdir -p data logs temp models && \
     chown -R same:same /app
-
-# Установка SpaCy модели
-RUN python -m spacy download ru_core_news_lg
 
 # Переключение на непривилегированного пользователя
 USER same
@@ -66,7 +66,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 # Проверка здоровья
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8000/search/health || exit 1
 
 # Экспорт портов
 EXPOSE 8000

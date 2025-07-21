@@ -22,7 +22,11 @@ class TestAdvancedModelManager:
         """Создание экземпляра менеджера для тестов"""
         # Создаем новый экземпляр для каждого теста
         AdvancedModelManager._instance = None
-        return AdvancedModelManager()
+        manager = AdvancedModelManager()
+        yield manager
+        # Очистка после теста
+        manager.shutdown()
+        AdvancedModelManager._instance = None
     
     def test_singleton_pattern(self):
         """Тест singleton pattern"""
@@ -196,41 +200,51 @@ class TestAdvancedModelManager:
 
 class TestMemoryMonitor:
     """Тесты для MemoryMonitor"""
-    
+
     def test_memory_stats(self):
         """Тест получения статистики памяти"""
         monitor = MemoryMonitor(memory_limit_gb=8.0)
-        stats = monitor.get_memory_stats()
-        
-        assert stats.total_memory > 0
-        assert stats.used_memory > 0
-        assert stats.available_memory > 0
-        assert 0 <= stats.memory_percent <= 100
-    
+        try:
+            stats = monitor.get_memory_stats()
+
+            assert stats.total_memory > 0
+            assert stats.used_memory > 0
+            assert stats.available_memory > 0
+            assert 0 <= stats.memory_percent <= 100
+        finally:
+            # Убеждаемся, что мониторинг остановлен
+            monitor.stop_monitoring()
+
     def test_memory_registration(self):
         """Тест регистрации использования памяти"""
         monitor = MemoryMonitor(memory_limit_gb=8.0)
-        
-        monitor.register_model_memory("test_model", 1.5)
-        assert monitor._model_memory_estimates["test_model"] == 1.5
-        
-        monitor.unregister_model_memory("test_model")
-        assert "test_model" not in monitor._model_memory_estimates
-    
+        try:
+            monitor.register_model_memory("test_model", 1.5)
+            assert monitor._model_memory_estimates["test_model"] == 1.5
+
+            monitor.unregister_model_memory("test_model")
+            assert "test_model" not in monitor._model_memory_estimates
+        finally:
+            # Убеждаемся, что мониторинг остановлен
+            monitor.stop_monitoring()
+
     def test_cleanup_callbacks(self):
         """Тест callback'ов очистки"""
         monitor = MemoryMonitor(memory_limit_gb=8.0)
-        
-        cleanup_called = False
-        
-        def cleanup_callback():
-            nonlocal cleanup_called
-            cleanup_called = True
-        
-        monitor.register_cleanup_callback("test", cleanup_callback)
-        monitor.force_cleanup()
-        
-        assert cleanup_called
+        try:
+            cleanup_called = False
+
+            def cleanup_callback():
+                nonlocal cleanup_called
+                cleanup_called = True
+
+            monitor.register_cleanup_callback("test", cleanup_callback)
+            monitor.force_cleanup()
+
+            assert cleanup_called
+        finally:
+            # Убеждаемся, что мониторинг остановлен
+            monitor.stop_monitoring()
 
 
 if __name__ == "__main__":

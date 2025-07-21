@@ -71,6 +71,31 @@ services:
       - same-network
     restart: unless-stopped
 
+  # Frontend React приложение
+  frontend:
+    build:
+      context: ../frontend/same-frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: same-frontend
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:8000
+      - REACT_APP_MAX_FILE_SIZE=52428800
+      - REACT_APP_ENVIRONMENT=production
+    ports:
+      - "3000:3000"
+    depends_on:
+      app:
+        condition: service_started
+    networks:
+      - same-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # PgAdmin для управления БД
   pgadmin:
     image: dpage/pgadmin4:latest

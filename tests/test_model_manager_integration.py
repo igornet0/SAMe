@@ -11,12 +11,21 @@ from same.models import get_model_manager, AdvancedModelManager
 
 class TestModelManagerIntegration:
     """Интеграционные тесты для менеджера моделей"""
-    
+
+    def teardown_method(self):
+        """Очистка после каждого теста"""
+        # Останавливаем мониторинг памяти если он запущен
+        if hasattr(AdvancedModelManager, '_instance') and AdvancedModelManager._instance:
+            if hasattr(AdvancedModelManager._instance, 'memory_monitor'):
+                AdvancedModelManager._instance.memory_monitor.stop_monitoring()
+        # Сбрасываем singleton
+        AdvancedModelManager._instance = None
+
     def test_basic_initialization(self):
         """Тест базовой инициализации"""
         # Сбрасываем singleton для чистого теста
         AdvancedModelManager._instance = None
-        
+
         manager = get_model_manager()
         assert isinstance(manager, AdvancedModelManager)
         assert manager._initialized

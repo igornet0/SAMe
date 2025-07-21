@@ -9,8 +9,7 @@ import time
 from datetime import datetime
 from typing import List, Dict, Any
 
-# Добавляем путь к модулям SAMe
-sys.path.append(os.path.abspath('.'))
+# Путь к модулям SAMe настроен через poetry/pip install
 
 def main():
     """Выполняет все ячейки упрощенного notebook"""
@@ -315,6 +314,14 @@ def main():
         'total_results_found': total_found,
         'parameters_extracted': total_params if 'extraction_results' in locals() else 0
     }
+
+
+def test_simple_notebook():
+    """Test function for pytest compatibility"""
+    results = main()
+    assert results is not None
+    assert 'sample_data_count' in results
+    print(f"\n🏁 Тестирование завершено с результатами: {results}")
 
 
 if __name__ == "__main__":

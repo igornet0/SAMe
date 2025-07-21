@@ -6,8 +6,7 @@ Test script to verify ExcelExportConfig import works correctly
 import sys
 import os
 
-# Add path to modules
-sys.path.append(os.path.abspath('.'))
+# Path to modules configured through poetry/pip install
 
 def test_excel_export_imports():
     """Test that ExcelExportConfig and related classes can be imported"""

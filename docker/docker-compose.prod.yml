@@ -94,6 +94,30 @@ services:
       timeout: 10s
       retries: 3
 
+  # Frontend React приложение
+  same-frontend:
+    build:
+      context: ../frontend/same-frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: same-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_BASE_URL=http://same-app:8000
+      - REACT_APP_MAX_FILE_SIZE=52428800
+      - REACT_APP_ENVIRONMENT=production
+    depends_on:
+      - same-app
+    networks:
+      - same-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Nginx как reverse proxy
   same-nginx:
     image: nginx:alpine
@@ -108,6 +132,7 @@ services:
       - same-logs:/var/log/nginx
     depends_on:
       - same-app
+      - same-frontend
     networks:
       - same-network
 
