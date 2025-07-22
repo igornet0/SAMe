@@ -75,13 +75,19 @@ class HybridSearchEngine:
         # Обучение компонентов
         if self.config.enable_parallel_search:
             # Параллельное обучение
-            with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
-                fuzzy_future = executor.submit(self.fuzzy_engine.fit, documents, document_ids)
-                semantic_future = executor.submit(self.semantic_engine.fit, documents, document_ids)
-                
-                # Ждем завершения
-                fuzzy_future.result()
-                semantic_future.result()
+            try:
+                with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
+                    fuzzy_future = executor.submit(self.fuzzy_engine.fit, documents, document_ids)
+                    semantic_future = executor.submit(self.semantic_engine.fit, documents, document_ids)
+
+                    # Ждем завершения
+                    fuzzy_future.result()
+                    semantic_future.result()
+            except Exception as e:
+                logger.warning(f"Parallel training failed: {e}, falling back to sequential")
+                # Fallback к последовательному обучению
+                self.fuzzy_engine.fit(documents, document_ids)
+                self.semantic_engine.fit(documents, document_ids)
         else:
             # Последовательное обучение
             self.fuzzy_engine.fit(documents, document_ids)

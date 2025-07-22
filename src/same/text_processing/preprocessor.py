@@ -92,14 +92,12 @@ class TextPreprocessor:
         Returns:
             Список результатов обработки
         """
-        try:
-            import asyncio
-            loop = asyncio.get_running_loop()
-            # Если есть активный event loop, создаем задачу
-            return asyncio.create_task(self.preprocess_batch_async(texts))
-        except RuntimeError:
-            # Если нет активного loop, создаем новый
-            return asyncio.run(self.preprocess_batch_async(texts))
+        # Простая синхронная реализация для обратной совместимости
+        results = []
+        for text in texts:
+            result = self.preprocess_text(text)
+            results.append(result)
+        return results
 
     async def preprocess_batch_async(self, texts: List[str]) -> List[Dict[str, Any]]:
         """

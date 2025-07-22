@@ -111,16 +111,56 @@ class Lemmatizer:
         Returns:
             Dict с результатами лемматизации
         """
-        # Проверяем, есть ли уже запущенный event loop
+        # Синхронная реализация без asyncio.run()
         try:
+            # Проверяем, есть ли уже запущенный event loop
             loop = asyncio.get_running_loop()
-            # Если есть, создаем задачу
-            return asyncio.create_task(self.lemmatize_text_async(text))
+            # Если есть, используем синхронную версию
+            return self._lemmatize_text_sync(text)
         except RuntimeError:
-            # Если нет, создаем новый loop
+            # Если нет активного loop, можем использовать asyncio.run
             return asyncio.run(self.lemmatize_text_async(text))
 
-    
+    def _lemmatize_text_sync(self, text: str) -> Dict[str, any]:
+        """
+        Синхронная версия лемматизации без использования asyncio
+        """
+        if not text or not text.strip():
+            return {
+                'original': text,
+                'lemmatized': text,
+                'tokens': [],
+                'lemmas': [],
+                'pos_tags': [],
+                'filtered_lemmas': []
+            }
+
+        try:
+            # Инициализируем модель если нужно (синхронно)
+            if self._nlp is None:
+                import spacy
+                try:
+                    self._nlp = spacy.load(self.config.model_name)
+                except OSError:
+                    logger.warning(f"Model {self.config.model_name} not found, using default")
+                    self._nlp = spacy.load("ru_core_news_sm")
+
+            # Обрабатываем текст
+            doc = self._nlp(text)
+            return self._process_doc(doc, text)
+
+        except Exception as e:
+            logger.error(f"Error in synchronous lemmatization: {e}")
+            return {
+                'original': text,
+                'lemmatized': text,
+                'tokens': [],
+                'lemmas': [],
+                'pos_tags': [],
+                'filtered_lemmas': []
+            }
+
+
     def _should_include_token(self, token) -> bool:
         """Определяет, должен ли токен быть включен в результат"""
         # Пропускаем короткие токены
@@ -166,32 +206,6 @@ class Lemmatizer:
         return token.pos_ in technical_pos
     
     async def lemmatize_batch_async(self, texts: List[str]) -> List[Dict[str, any]]:
-        """Асинхронная пакетная лемматизация"""
-        await self._ensure_initialized()
-
-        results = []
-
-        # Используем nlp.pipe для эффективной обработки
-        docs = list(self._nlp.pipe(texts))
-
-        for i, doc in enumerate(docs):
-            try:
-                result = self._process_doc(doc, texts[i])
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Error lemmatizing text {i}: {e}")
-                results.append({
-                    'original': texts[i],
-                    'lemmatized': texts[i],
-                    'tokens': [],
-                    'lemmas': [],
-                    'pos_tags': [],
-                    'filtered_lemmas': []
-                })
-
-        return results
-
-    async def lemmatize_batch_async(self, texts: List[str]) -> List[Dict[str, any]]:
         """Асинхронная пакетная лемматизация с оптимизацией производительности"""
         if not texts:
             return []
@@ -207,7 +221,7 @@ class Lemmatizer:
 
             try:
                 # Используем pipe для эффективной обработки
-                docs = list(self.nlp.pipe(batch, disable=['parser', 'ner']))
+                docs = list(self._nlp.pipe(batch, disable=['parser', 'ner']))
 
                 for j, doc in enumerate(docs):
                     original_text = batch[j]
@@ -236,11 +250,22 @@ class Lemmatizer:
     def lemmatize_batch(self, texts: List[str]) -> List[Dict[str, any]]:
         """Синхронная пакетная лемматизация (для обратной совместимости)"""
         try:
+            # Проверяем, есть ли уже запущенный event loop
             loop = asyncio.get_running_loop()
-            return asyncio.create_task(self.lemmatize_batch_async(texts))
+            # Если есть, используем синхронную версию
+            return self._lemmatize_batch_sync(texts)
         except RuntimeError:
+            # Если нет активного loop, можем использовать asyncio.run
             return asyncio.run(self.lemmatize_batch_async(texts))
-    
+
+    def _lemmatize_batch_sync(self, texts: List[str]) -> List[Dict[str, any]]:
+        """Синхронная пакетная лемматизация без asyncio"""
+        results = []
+        for text in texts:
+            result = self._lemmatize_text_sync(text)
+            results.append(result)
+        return results
+
     def _process_doc(self, doc, original_text: str) -> Dict[str, any]:
         """Обработка SpaCy документа"""
         tokens = []

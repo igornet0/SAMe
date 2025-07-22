@@ -28,7 +28,9 @@ services:
       - ../:/app  # Монтируем весь проект для hot reload
       - same-dev-data:/app/data
       - same-dev-models:/app/models
+      - same-dev-cache:/app/cache
       - same-dev-logs:/app/logs
+      - same-dev-matplotlib:/tmp/matplotlib
       - /app/__pycache__  # Исключаем кэш Python
       - /app/.venv  # Исключаем виртуальное окружение
       - /app/.pytest_cache
@@ -73,29 +75,29 @@ services:
       - same-dev-network
 
   # Jupyter для экспериментов
-  same-jupyter:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      target: production
-    container_name: same-jupyter
-    restart: unless-stopped
-    ports:
-      - "8888:8888"
-    environment:
-      - JUPYTER_ENABLE_LAB=yes
-      - JUPYTER_TOKEN=same-dev-token
-    volumes:
-      - ../:/app
-      - same-dev-notebooks:/app/notebooks
-      - same-dev-data:/app/data
-    networks:
-      - same-dev-network
-    command: >
-      sh -c "
-        pip install jupyter jupyterlab &&
-        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=same-dev-token
-      "
+  # same-jupyter:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile
+  #     target: production
+  #   container_name: same-jupyter
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8888:8888"
+  #   environment:
+  #     - JUPYTER_ENABLE_LAB=yes
+  #     - JUPYTER_TOKEN=same-dev-token
+  #   volumes:
+  #     - ../:/app
+  #     - same-dev-notebooks:/app/notebooks
+  #     - same-dev-data:/app/data
+  #   networks:
+  #     - same-dev-network
+  #   command: >
+  #     sh -c "
+  #       pip install jupyter jupyterlab &&
+  #       jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=same-dev-token
+  #     "
 
   # pgAdmin для управления базой данных
   same-pgadmin:
@@ -206,7 +208,11 @@ volumes:
     driver: local
   same-dev-models:
     driver: local
+  same-dev-cache:
+    driver: local
   same-dev-logs:
+    driver: local
+  same-dev-matplotlib:
     driver: local
   same-dev-postgres-data:
     driver: local

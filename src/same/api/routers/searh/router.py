@@ -151,7 +151,7 @@ async def search_analogs(request: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/search-single/{query}")
-async def search_single_analog(query: str, method: str = "hybrid", max_results: int = 10):
+async def search_single_analog(query: str, method: str = "fuzzy", max_results: int = 10):
     """Поиск аналогов для одного запроса"""
     global search_engine
 

@@ -393,12 +393,42 @@ class AdvancedModelManager:
                 logger.warning("CUDA not available, falling back to CPU")
                 device = "cpu"
 
-            model = SentenceTransformer(config.model_path, device=device)
+            # Настройка кэша для моделей
+            import os
+            cache_dir = os.environ.get('SENTENCE_TRANSFORMERS_HOME', '/app/models/sentence_transformers')
+
+            # Создаем директорию кэша если не существует
+            Path(cache_dir).mkdir(parents=True, exist_ok=True)
+
+            # Загружаем модель с указанием кэша
+            model = SentenceTransformer(
+                config.model_path,
+                device=device,
+                cache_folder=cache_dir
+            )
 
             logger.debug(f"SentenceTransformer model loaded: {config.model_path} on {device}")
             return model
 
         except Exception as e:
+            # Пытаемся загрузить fallback модель
+            fallback_models = [
+                "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                "sentence-transformers/distiluse-base-multilingual-cased",
+                "sentence-transformers/all-MiniLM-L6-v2"
+            ]
+
+            for fallback_model in fallback_models:
+                if fallback_model != config.model_path:
+                    try:
+                        logger.warning(f"Trying fallback model: {fallback_model}")
+                        model = SentenceTransformer(fallback_model, device=device)
+                        logger.info(f"Successfully loaded fallback model: {fallback_model}")
+                        return model
+                    except Exception as fallback_error:
+                        logger.warning(f"Fallback model {fallback_model} failed: {fallback_error}")
+                        continue
+
             raise ModelLoadError(config.name, f"Failed to load SentenceTransformer: {str(e)}")
 
     def _cleanup_idle_models(self):

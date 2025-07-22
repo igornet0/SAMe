@@ -97,7 +97,15 @@ class DataManager:
                 async with aiofiles.open(path, mode="r") as f:
                     return pd.read_csv(await f.read())
             elif format == "parquet":
-                return pd.read_parquet(path)
+                try:
+                    return pd.read_parquet(path, engine='pyarrow')
+                except ImportError:
+                    logger.warning("PyArrow not available, trying fastparquet...")
+                    try:
+                        return pd.read_parquet(path, engine='fastparquet')
+                    except ImportError:
+                        logger.error("Neither pyarrow nor fastparquet available for parquet support")
+                        raise ValueError("Parquet support requires pyarrow or fastparquet. Install with: pip install pyarrow")
             elif format == "json":
                 async with aiofiles.open(path, mode="r") as f:
                     json_content = await f.read()
@@ -127,7 +135,15 @@ class DataManager:
                     await f.write(data.to_csv(index=False))
 
             elif format == "parquet":
-                data.to_parquet(path)
+                try:
+                    data.to_parquet(path, engine='pyarrow')
+                except ImportError:
+                    logger.warning("PyArrow not available, trying fastparquet...")
+                    try:
+                        data.to_parquet(path, engine='fastparquet')
+                    except ImportError:
+                        logger.error("Neither pyarrow nor fastparquet available for parquet support")
+                        raise ValueError("Parquet support requires pyarrow or fastparquet. Install with: pip install pyarrow")
 
             elif format == "json":
                 async with aiofiles.open(path, mode=mode) as f:

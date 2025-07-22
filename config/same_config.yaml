@@ -64,7 +64,7 @@ search_engine:
   # Общие настройки
   default_method: "hybrid"  # fuzzy, semantic, hybrid
   similarity_threshold: 0.6
-  max_results_per_query: 10
+  max_results_per_query: 100
   enable_parallel_search: true
   max_workers: 4
   

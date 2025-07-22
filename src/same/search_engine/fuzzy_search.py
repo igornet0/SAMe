@@ -21,7 +21,7 @@ class FuzzySearchConfig:
     """Конфигурация нечеткого поиска"""
     tfidf_max_features: int = 10000
     tfidf_ngram_range: Tuple[int, int] = (1, 3)
-    tfidf_min_df: int = 2
+    tfidf_min_df: int = 1  # Changed from 2 to 1 to handle small datasets
     tfidf_max_df: float = 0.95
 
     # Пороги схожести
@@ -70,12 +70,18 @@ class FuzzySearchEngine:
         self.document_ids = document_ids or list(range(len(documents)))
         
         logger.info(f"Fitting TF-IDF vectorizer on {len(documents)} documents")
-        
+
+        # Динамическая настройка min_df для малых наборов данных
+        min_df = self.config.tfidf_min_df
+        if len(documents) < 10:
+            min_df = 1  # Для очень малых наборов данных используем min_df=1
+            logger.info(f"Small dataset detected ({len(documents)} docs), using min_df=1")
+
         # Инициализация TF-IDF векторизатора
         self.vectorizer = TfidfVectorizer(
             max_features=self.config.tfidf_max_features,
             ngram_range=self.config.tfidf_ngram_range,
-            min_df=self.config.tfidf_min_df,
+            min_df=min_df,
             max_df=self.config.tfidf_max_df,
             lowercase=True,
             stop_words=None,  # Стоп-слова уже удалены на этапе предобработки

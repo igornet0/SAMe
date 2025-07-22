@@ -46,15 +46,19 @@ WORKDIR /app
 # Копирование исходного кода
 COPY src/ ./src/
 COPY config/ ./config/
+COPY scripts/ ./scripts/
 COPY alembic.ini ./
 COPY config/.env.example ./.env
 
-# Установка SpaCy модели (до переключения пользователя)
-# RUN python -m spacy download ru_core_news_lg
+# Загрузка моделей ML
+RUN python scripts/download_models.py
 
-# Создание необходимых директорий
-RUN mkdir -p data logs temp models && \
-    chown -R same:same /app
+# Создание необходимых директорий с правильными правами
+RUN mkdir -p data logs temp models cache && \
+    mkdir -p /app/models/transformers /app/models/sentence_transformers && \
+    mkdir -p /tmp/matplotlib && \
+    chown -R same:same /app && \
+    chown -R same:same /tmp/matplotlib
 
 # Переключение на непривилегированного пользователя
 USER same
@@ -63,6 +67,10 @@ USER same
 ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV TRANSFORMERS_CACHE="/app/models/transformers"
+ENV SENTENCE_TRANSFORMERS_HOME="/app/models/sentence_transformers"
+ENV MPLCONFIGDIR="/tmp/matplotlib"
+ENV HF_HOME="/app/models/transformers"
 
 # Проверка здоровья
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \

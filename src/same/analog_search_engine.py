@@ -16,7 +16,7 @@ from .search_engine import FuzzySearchEngine, SemanticSearchEngine, HybridSearch
 from .parameter_extraction import RegexParameterExtractor, ParameterParser, ParameterParserConfig
 from .parameter_extraction.parameter_utils import ParameterFormatter, ParameterAnalyzer, ParameterDataFrameUtils
 from .export import ExcelExporter, ExportConfig
-from .data_manager import DataManager
+from .data_manager.DataManager import DataManager
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class AnalogSearchConfig:
     # Параметры поиска
     search_method: str = "hybrid"  # fuzzy, semantic, hybrid
     similarity_threshold: float = 0.6
-    max_results_per_query: int = 10
+    max_results_per_query: int = 100
     
     # Параметры обработки
     batch_size: int = 100
@@ -127,25 +127,78 @@ class AnalogSearchEngine:
     async def _preprocess_catalog(self):
         """Предобработка каталога данных"""
         logger.info("Starting catalog preprocessing...")
-        
+
         # Определяем колонку с наименованиями
         name_column = self._find_name_column(self.catalog_data)
-        
-        # Предобработка текстов
-        self.processed_catalog = self.preprocessor.preprocess_dataframe(
-            self.catalog_data, 
+
+        # Предобработка текстов с использованием async версии
+        self.processed_catalog = await self._preprocess_dataframe_async(
+            self.catalog_data,
             name_column,
             output_columns={
                 'final': 'processed_name'
             }
         )
-        
+
         # Извлечение параметров если включено
         if self.config.enable_parameter_extraction:
             await self._extract_parameters()
-        
+
         logger.info("Catalog preprocessing completed")
-    
+
+    async def _preprocess_dataframe_async(self, df: pd.DataFrame, text_column: str,
+                                        output_columns: Dict[str, str] = None) -> pd.DataFrame:
+        """
+        Асинхронная предобработка DataFrame с текстами
+
+        Args:
+            df: DataFrame с данными
+            text_column: Название колонки с текстом
+            output_columns: Маппинг названий выходных колонок
+
+        Returns:
+            DataFrame с добавленными колонками обработанного текста
+        """
+        if text_column not in df.columns:
+            raise ValueError(f"Column '{text_column}' not found in DataFrame")
+
+        # Настройки выходных колонок по умолчанию
+        default_columns = {
+            'cleaned': f'{text_column}_cleaned',
+            'normalized': f'{text_column}_normalized',
+            'lemmatized': f'{text_column}_lemmatized',
+            'final': f'{text_column}_processed'
+        }
+
+        if output_columns:
+            default_columns.update(output_columns)
+
+        # Получаем тексты для обработки
+        texts = df[text_column].fillna('').astype(str).tolist()
+
+        # Обрабатываем тексты асинхронно
+        results = await self.preprocessor.preprocess_batch_async(texts)
+
+        # Проверяем соответствие длин
+        if len(results) != len(texts):
+            logger.error(f"Results length ({len(results)}) doesn't match texts length ({len(texts)})")
+            raise ValueError(f"Processing failed: expected {len(texts)} results, got {len(results)}")
+
+        # Добавляем результаты в DataFrame
+        df_result = df.copy()
+
+        if self.preprocessor.config.save_intermediate_steps:
+            df_result[default_columns['cleaned']] = [r['cleaning']['normalized'] for r in results]
+            df_result[default_columns['normalized']] = [r['normalization']['final_normalized'] for r in results]
+            df_result[default_columns['lemmatized']] = [r['lemmatization']['lemmatized'] for r in results]
+
+        df_result[default_columns['final']] = [r['final_text'] for r in results]
+
+        # Добавляем статистику
+        df_result[f'{text_column}_processing_success'] = [r['processing_successful'] for r in results]
+
+        return df_result
+
     def _find_name_column(self, df: pd.DataFrame) -> str:
         """Поиск колонки с наименованиями"""
         possible_names = ['name', 'наименование', 'название', 'item_name', 'product_name']
@@ -210,9 +263,14 @@ class AnalogSearchEngine:
             logger.info("Fuzzy search engine initialized")
         
         if self.config.search_method in ['semantic', 'hybrid']:
-            self.semantic_engine = SemanticSearchEngine()
-            self.semantic_engine.fit(documents, document_ids)
-            logger.info("Semantic search engine initialized")
+            try:
+                self.semantic_engine = SemanticSearchEngine()
+                self.semantic_engine.fit(documents, document_ids)
+                logger.info("Semantic search engine initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize semantic search engine: {e}")
+                logger.info("Continuing with fuzzy search only")
+                self.semantic_engine = None
         
         if self.config.search_method == 'hybrid':
             # TODO: Реализовать HybridSearchEngine
@@ -335,9 +393,15 @@ class AnalogSearchEngine:
     
     async def _hybrid_search(self, queries: List[str]) -> Dict[str, List[Dict[str, Any]]]:
         """Гибридный поиск (комбинация нечеткого и семантического)"""
-        # Получаем результаты от обоих движков
+        # Получаем результаты от нечеткого поиска
         fuzzy_results = await self._fuzzy_search(queries)
-        semantic_results = await self._semantic_search(queries)
+
+        # Получаем результаты от семантического поиска если доступен
+        if self.semantic_engine and self.semantic_engine.is_fitted:
+            semantic_results = await self._semantic_search(queries)
+        else:
+            logger.info("Semantic search not available, using fuzzy search only")
+            return fuzzy_results
         
         # Комбинируем результаты
         combined_results = {}

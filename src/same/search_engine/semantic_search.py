@@ -120,10 +120,44 @@ class SemanticSearchEngine:
         """
         try:
             loop = asyncio.get_running_loop()
-            return asyncio.create_task(self.fit_async(documents, document_ids))
+            # Если есть активный loop (например, в Jupyter), используем синхронную версию
+            logger.warning("Active event loop detected, using synchronous fit")
+            return self._fit_sync(documents, document_ids)
         except RuntimeError:
+            # Если нет активного loop, можем использовать async
             return asyncio.run(self.fit_async(documents, document_ids))
-    
+
+    def _fit_sync(self, documents: List[str], document_ids: List[Any] = None):
+        """
+        Синхронное обучение поискового движка на корпусе документов
+
+        Args:
+            documents: Список текстов для индексации
+            document_ids: Список ID документов (опционально)
+        """
+        if not documents:
+            raise ValueError("Documents list cannot be empty")
+
+        # Синхронная загрузка модели
+        if self._model is None:
+            self._model = self.model_manager.get_sentence_transformer_sync()
+            self._initialized = True
+            logger.info(f"SemanticSearchEngine model loaded: {self.config.model_name}")
+
+        self.documents = documents
+        self.document_ids = document_ids or list(range(len(documents)))
+
+        logger.info(f"Generating embeddings for {len(documents)} documents")
+
+        # Генерация эмбеддингов синхронно
+        self.embeddings = self._generate_embeddings(documents)
+
+        # Создание FAISS индекса
+        self._build_index()
+
+        self.is_fitted = True
+        logger.info("Semantic search engine fitted successfully")
+
     async def _generate_embeddings_async(self, texts: List[str]) -> np.ndarray:
         """Асинхронная генерация эмбеддингов для текстов"""
         await self._ensure_model_loaded()
@@ -379,10 +413,17 @@ class SemanticSearchEngine:
         # Загружаем FAISS индекс
         index_path = str(Path(filepath).with_suffix('.faiss'))
         self.index = faiss.read_index(index_path)
-        
-        # Перезагружаем модель
-        self._load_model()
-        
+
+        # Перезагружаем модель (асинхронно)
+        try:
+            # Пытаемся загрузить модель синхронно для обратной совместимости
+            if self._model is None:
+                self._model = self.model_manager.get_sentence_transformer_sync()
+                self._initialized = True
+        except Exception as e:
+            logger.warning(f"Failed to load model synchronously: {e}")
+            # Модель будет загружена при первом использовании
+
         logger.info(f"Model loaded from {filepath} and {index_path}")
     
     def get_statistics(self) -> Dict[str, Any]:
