@@ -45,7 +45,7 @@ class TestAdvancedModelManager:
         config = ModelConfig(
             name="test_model",
             model_type=ModelType.SPACY,
-            model_path="ru_core_news_sm",
+            model_path="ru_core_news_lg",
             cache_size_gb=0.1
         )
         
@@ -62,10 +62,10 @@ class TestAdvancedModelManager:
             mock_spacy_load.return_value = mock_nlp
             
             # Тестируем загрузку модели
-            model = await manager.get_spacy_model("ru_core_news_sm")
+            model = await manager.get_spacy_model("ru_core_news_lg")
             
             assert model is mock_nlp
-            mock_spacy_load.assert_called_once_with("ru_core_news_sm")
+            mock_spacy_load.assert_called_once_with("ru_core_news_lg")
     
     @pytest.mark.asyncio
     async def test_sentence_transformer_loading(self, manager):
@@ -89,10 +89,10 @@ class TestAdvancedModelManager:
             mock_spacy_load.return_value = mock_nlp
             
             # Первый вызов
-            model1 = await manager.get_spacy_model("ru_core_news_sm")
+            model1 = await manager.get_spacy_model("ru_core_news_lg")
             
             # Второй вызов должен вернуть тот же экземпляр
-            model2 = await manager.get_spacy_model("ru_core_news_sm")
+            model2 = await manager.get_spacy_model("ru_core_news_lg")
             
             assert model1 is model2
             # spacy.load должен быть вызван только один раз
@@ -108,7 +108,7 @@ class TestAdvancedModelManager:
             
             # Запускаем несколько конкурентных загрузок
             tasks = [
-                manager.get_spacy_model("ru_core_news_sm")
+                manager.get_spacy_model("ru_core_news_lg")
                 for _ in range(5)
             ]
             
@@ -148,16 +148,16 @@ class TestAdvancedModelManager:
             mock_spacy_load.return_value = mock_nlp
             
             # Загружаем модель
-            await manager.get_spacy_model("ru_core_news_sm")
+            await manager.get_spacy_model("ru_core_news_lg")
             
             # Проверяем, что модель загружена
-            assert "ru_core_news_sm" in manager._models
+            assert "ru_core_news_lg" in manager._models
             
             # Выгружаем модель
-            result = manager.unload_model("ru_core_news_sm")
+            result = manager.unload_model("ru_core_news_lg")
             
             assert result is True
-            assert "ru_core_news_sm" not in manager._models
+            assert "ru_core_news_lg" not in manager._models
     
     @pytest.mark.asyncio
     async def test_model_load_error(self, manager):

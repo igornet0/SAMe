@@ -17,8 +17,8 @@ def test_spacy_model_basic():
         import spacy
         
         # Load the model
-        print("Loading ru_core_news_sm model...")
-        nlp = spacy.load('ru_core_news_sm')
+        print("Loading ru_core_news_lg model...")
+        nlp = spacy.load('ru_core_news_lg')
         print("✅ Model loaded successfully")
         
         # Test basic functionality
@@ -46,7 +46,7 @@ def test_lemmatizer_with_spacy():
         
         # Create config with the small model
         lemmatizer_config = LemmatizerConfig(
-            model_name="ru_core_news_sm",
+            model_name="ru_core_news_lg",
             preserve_technical_terms=True,
             min_token_length=2
         )
@@ -110,7 +110,7 @@ def test_notebook_cell_simulation():
 
         # Создаем конфигурацию и экземпляр лемматизатора (exactly as in notebook)
         lemmatizer_config = LemmatizerConfig(
-            model_name="ru_core_news_sm",  # Using the small model
+            model_name="ru_core_news_lg",  # Using the small model
             preserve_technical_terms=True,
             min_token_length=2
         )
@@ -179,13 +179,13 @@ def test_configuration_options():
         configs = [
             {
                 'name': 'Default (Small Model)',
-                'config': LemmatizerConfig(model_name="ru_core_news_sm"),
+                'config': LemmatizerConfig(model_name="ru_core_news_lg"),
                 'test_text': 'Болт М10×50 ГОСТ 7798-70'
             },
             {
                 'name': 'Technical Terms Preserved',
                 'config': LemmatizerConfig(
-                    model_name="ru_core_news_sm",
+                    model_name="ru_core_news_lg",
                     preserve_technical_terms=True,
                     min_token_length=2
                 ),
@@ -194,7 +194,7 @@ def test_configuration_options():
             {
                 'name': 'Technical Terms Not Preserved',
                 'config': LemmatizerConfig(
-                    model_name="ru_core_news_sm",
+                    model_name="ru_core_news_lg",
                     preserve_technical_terms=False,
                     min_token_length=2
                 ),
@@ -203,7 +203,7 @@ def test_configuration_options():
             {
                 'name': 'Longer Min Token Length',
                 'config': LemmatizerConfig(
-                    model_name="ru_core_news_sm",
+                    model_name="ru_core_news_lg",
                     preserve_technical_terms=True,
                     min_token_length=4
                 ),
@@ -278,7 +278,7 @@ def main():
     if passed == len(results):
         print("\n🎉 ALL TESTS PASSED!")
         print("\n📝 Summary:")
-        print("   ✅ SpaCy ru_core_news_sm model is installed and working")
+        print("   ✅ SpaCy ru_core_news_lg model is installed and working")
         print("   ✅ LemmatizerConfig creates successfully with correct parameters")
         print("   ✅ Lemmatizer processes Russian text correctly")
         print("   ✅ Technical terms are preserved when configured")
@@ -286,7 +286,7 @@ def main():
         
         print("\n🚀 The SAMe_Demo.ipynb Lemmatizer section is now fully functional!")
         print("\n📋 What works now:")
-        print("   • SpaCy ru_core_news_sm model is installed")
+        print("   • SpaCy ru_core_news_lg model is installed")
         print("   • LemmatizerConfig with correct parameter names")
         print("   • Full lemmatization functionality for Russian MTR text")
         print("   • Technical term preservation (М10, кВт, мм, ГОСТ)")
@@ -294,7 +294,7 @@ def main():
         print("   • Configurable token length filtering")
         
         print("\n💡 Model comparison:")
-        print("   • ru_core_news_sm: 15.3 MB, faster, good accuracy")
+        print("   • ru_core_news_lg: 15.3 MB, faster, good accuracy")
         print("   • ru_core_news_lg: 513.4 MB, slower, higher accuracy")
         print("   • For MTR processing, the small model should be sufficient")
         

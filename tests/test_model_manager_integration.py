@@ -63,7 +63,7 @@ class TestModelManagerIntegration:
         manager = get_model_manager()
 
         # Очищаем кэш модели перед тестом
-        manager.unload_model("ru_core_news_sm")
+        manager.unload_model("ru_core_news_lg")
 
         with patch('same.models.model_manager.spacy.load') as mock_spacy_load:
             mock_nlp = Mock()
@@ -71,13 +71,13 @@ class TestModelManagerIntegration:
             mock_spacy_load.return_value = mock_nlp
 
             # Загружаем модель
-            model = await manager.get_spacy_model("ru_core_news_sm")
+            model = await manager.get_spacy_model("ru_core_news_lg")
 
             assert model is mock_nlp
-            mock_spacy_load.assert_called_once_with("ru_core_news_sm")
+            mock_spacy_load.assert_called_once_with("ru_core_news_lg")
 
             # Проверяем, что модель кэширована
-            assert "ru_core_news_sm" in manager._models
+            assert "ru_core_news_lg" in manager._models
     
     @pytest.mark.asyncio
     async def test_sentence_transformer_loading_mock(self):
