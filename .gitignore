@@ -207,6 +207,13 @@ cache/
 pgadmin/
 models/
 
+# Model files (large binary files)
+*.faiss
+*.pkl
+src/m_t_last_models/
+src/m_t_last2_models/
+src/models/
+
 # Alembic versions (except template)
 alembic/versions/*.py
 !alembic/versions/.gitkeep
