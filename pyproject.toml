@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "same"
-version = "0.1.1"
+version = "0.1.2"
 description = "Search Analog Model Engine - система поиска аналогов МТР"
 authors = ["igornet0 <93836464+igornet0@users.noreply.github.com>"]
 readme = "README.md"
@@ -80,6 +80,7 @@ isort = "^5.12.0"
 flake8 = "^6.0.0"
 mypy = "^1.0.0"
 pre-commit = "^3.0.0"
+plotly = "^6.2.0"
 # Testing
 pytest = "^7.0.0"
 pytest-cov = "^4.0.0"

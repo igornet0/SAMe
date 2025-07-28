@@ -112,13 +112,17 @@ class PathSettings(BaseSettings):
     """Настройки путей"""
     model_config = SettingsConfigDict(**AppBaseConfig.__dict__, env_prefix="PATH__")
 
-    data_dir: Path = Field(default=Path("./data"))
-    input_dir: Path = Field(default=Path("./data/input"))
-    processed_dir: Path = Field(default=Path("./data/processed"))
-    output_dir: Path = Field(default=Path("./data/output"))
-    models_dir: Path = Field(default=Path("./models"))
-    logs_dir: Path = Field(default=Path("./logs"))
-    temp_dir: Path = Field(default=Path("./temp"))
+    # Get project root directory (assuming this file is in src/same/settings/)
+    _project_root: Path = Path(__file__).parent.parent.parent.parent.resolve()
+
+    # Move data and logs directories to src/
+    data_dir: Path = Field(default=_project_root / "src" / "data")
+    input_dir: Path = Field(default=_project_root / "src" / "data" / "input")
+    processed_dir: Path = Field(default=_project_root / "src" / "data" / "processed")
+    output_dir: Path = Field(default=_project_root / "src" / "data" / "output")
+    models_dir: Path = Field(default=_project_root / "src" / "models")
+    logs_dir: Path = Field(default=_project_root / "src" / "logs")
+    temp_dir: Path = Field(default=_project_root / "temp")
 
     @field_validator("*", mode="before")
     @classmethod

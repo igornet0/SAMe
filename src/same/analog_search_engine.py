@@ -12,6 +12,11 @@ import time
 
 # Импорты модулей системы
 from .text_processing import TextPreprocessor, PreprocessorConfig
+from .text_processing.interfaces import (
+    AnalogSearchEngineInterface, TextPreprocessorInterface,
+    SearchEngineInterface, FuzzySearchInterface,
+    SemanticSearchInterface, HybridSearchInterface
+)
 from .search_engine import FuzzySearchEngine, SemanticSearchEngine, HybridSearchEngine
 from .parameter_extraction import RegexParameterExtractor, ParameterParser, ParameterParserConfig
 from .parameter_extraction.parameter_utils import ParameterFormatter, ParameterAnalyzer, ParameterDataFrameUtils
@@ -43,14 +48,21 @@ class AnalogSearchConfig:
     output_dir: Path = Path("data/output")
 
 
-class AnalogSearchEngine:
-    """Главный класс системы поиска аналогов"""
-    
-    def __init__(self, config: AnalogSearchConfig = None):
+class AnalogSearchEngine(AnalogSearchEngineInterface):
+    """Главный класс системы поиска аналогов с dependency injection"""
+
+    def __init__(self, config: AnalogSearchConfig = None,
+                 preprocessor: TextPreprocessorInterface = None,
+                 fuzzy_engine: FuzzySearchInterface = None,
+                 semantic_engine: SemanticSearchInterface = None,
+                 hybrid_engine: HybridSearchInterface = None):
         self.config = config or AnalogSearchConfig()
-        
-        # Инициализация компонентов
-        self.preprocessor = TextPreprocessor(self.config.preprocessor_config)
+
+        # Инициализация компонентов через dependency injection
+        self._preprocessor = preprocessor or TextPreprocessor(self.config.preprocessor_config)
+        self._fuzzy_engine = fuzzy_engine
+        self._semantic_engine = semantic_engine
+        self._hybrid_engine = hybrid_engine
 
         # Инициализация парсера параметров
         parameter_config = ParameterParserConfig(
@@ -66,11 +78,11 @@ class AnalogSearchEngine:
 
         self.exporter = ExcelExporter(self.config.export_config)
         self.data_manager = DataManager()
-        
-        # Поисковые движки
-        self.fuzzy_engine = None
-        self.semantic_engine = None
-        self.hybrid_engine = None
+
+        # Поисковые движки (используем injected или создаем по умолчанию)
+        self.fuzzy_engine = self._fuzzy_engine
+        self.semantic_engine = self._semantic_engine
+        self.hybrid_engine = self._hybrid_engine
         
         # Данные
         self.catalog_data = None
@@ -78,7 +90,45 @@ class AnalogSearchEngine:
         self.is_ready = False
         
         logger.info("AnalogSearchEngine initialized")
-    
+
+    def set_preprocessor(self, preprocessor: TextPreprocessorInterface) -> None:
+        """Установка предобработчика через dependency injection"""
+        self._preprocessor = preprocessor
+        logger.info("Preprocessor updated via dependency injection")
+
+    def set_search_engine(self, engine: SearchEngineInterface, engine_type: str) -> None:
+        """
+        Установка поискового движка через dependency injection
+
+        Args:
+            engine: Экземпляр поискового движка
+            engine_type: Тип движка ('fuzzy', 'semantic', 'hybrid')
+        """
+        if engine_type == 'fuzzy':
+            if not isinstance(engine, FuzzySearchInterface):
+                raise TypeError("Engine must implement FuzzySearchInterface")
+            self.fuzzy_engine = engine
+            self._fuzzy_engine = engine
+        elif engine_type == 'semantic':
+            if not isinstance(engine, SemanticSearchInterface):
+                raise TypeError("Engine must implement SemanticSearchInterface")
+            self.semantic_engine = engine
+            self._semantic_engine = engine
+        elif engine_type == 'hybrid':
+            if not isinstance(engine, HybridSearchInterface):
+                raise TypeError("Engine must implement HybridSearchInterface")
+            self.hybrid_engine = engine
+            self._hybrid_engine = engine
+        else:
+            raise ValueError(f"Unknown engine type: {engine_type}")
+
+        logger.info(f"Search engine '{engine_type}' updated via dependency injection")
+
+    @property
+    def preprocessor(self) -> TextPreprocessorInterface:
+        """Получение текущего предобработчика"""
+        return self._preprocessor
+
     async def initialize(self, catalog_data: Union[pd.DataFrame, List[Dict[str, Any]], str]):
         """
         Инициализация системы с каталогом данных
@@ -255,31 +305,78 @@ class AnalogSearchEngine:
         # Подготовка данных для индексации
         documents = self.processed_catalog['processed_name'].fillna('').astype(str).tolist()
         document_ids = self.processed_catalog.index.tolist()
-        
+
+        # Подготовка метаданных с категориями
+        metadata = []
+        for idx, row in self.processed_catalog.iterrows():
+            meta = {
+                'original_name': row.get('original_name', ''),
+                'processed_name': row.get('processed_name', ''),
+                'category': 'unknown'  # Будет определена автоматически
+            }
+            # Добавляем параметры если есть
+            if hasattr(row, 'extracted_parameters') and row['extracted_parameters']:
+                meta['parameters'] = row['extracted_parameters']
+            metadata.append(meta)
+
         # Инициализация движков в зависимости от выбранного метода
         if self.config.search_method in ['fuzzy', 'hybrid']:
             self.fuzzy_engine = FuzzySearchEngine()
             self.fuzzy_engine.fit(documents, document_ids)
             logger.info("Fuzzy search engine initialized")
-        
+
         if self.config.search_method in ['semantic', 'hybrid']:
             try:
                 self.semantic_engine = SemanticSearchEngine()
-                self.semantic_engine.fit(documents, document_ids)
+                self.semantic_engine.fit(documents, document_ids, metadata)
                 logger.info("Semantic search engine initialized")
             except Exception as e:
                 logger.warning(f"Failed to initialize semantic search engine: {e}")
                 logger.info("Continuing with fuzzy search only")
                 self.semantic_engine = None
-        
+
         if self.config.search_method == 'hybrid':
-            # TODO: Реализовать HybridSearchEngine
-            logger.info("Hybrid search engine will be implemented")
+            try:
+                from .search_engine.hybrid_search import HybridSearchEngine
+                self.hybrid_engine = HybridSearchEngine()
+                self.hybrid_engine.fit(documents, document_ids, metadata)
+                logger.info("Hybrid search engine initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize hybrid search engine: {e}")
+                logger.info("Falling back to individual engines")
         
         logger.info("Search engines initialization completed")
-    
-    async def search_analogs(self, 
-                           queries: Union[str, List[str]], 
+
+    def search_analogs(self, query: str, search_type: str = "hybrid",
+                      top_k: int = 10, **kwargs) -> List[Dict[str, Any]]:
+        """
+        Синхронный поиск аналогов (реализация интерфейса)
+
+        Args:
+            query: Поисковый запрос
+            search_type: Тип поиска (fuzzy, semantic, hybrid)
+            top_k: Количество результатов
+            **kwargs: Дополнительные параметры
+
+        Returns:
+            Список найденных аналогов
+        """
+        try:
+            # Используем asyncio.run для вызова асинхронной версии
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Если уже в event loop, используем синхронную обработку
+                return self._search_analogs_sync(query, search_type, top_k, **kwargs)
+            else:
+                # Если нет активного loop, можем использовать asyncio.run
+                result = asyncio.run(self.search_analogs_async([query], search_type))
+                return result.get(query, [])[:top_k]
+        except RuntimeError:
+            # Fallback к синхронной версии
+            return self._search_analogs_sync(query, search_type, top_k, **kwargs)
+
+    async def search_analogs_async(self,
+                           queries: Union[str, List[str]],
                            method: str = None) -> Dict[str, List[Dict[str, Any]]]:
         """
         Поиск аналогов для запросов
@@ -309,27 +406,35 @@ class AnalogSearchEngine:
         if self.config.enable_parameter_extraction:
             enhanced_queries = await self._extract_query_parameters(processed_queries)
             # Извлекаем обработанные запросы для поиска
-            processed_queries = [q['processed_query'] for q in enhanced_queries]
+            processed_queries = [q['processed_query'] if q['processed_query'] is not None else "" for q in enhanced_queries]
         else:
             enhanced_queries = None
         
         # Выполнение поиска
         results = {}
-        
-        if method == 'fuzzy' and self.fuzzy_engine:
-            results = await self._fuzzy_search(processed_queries)
-        
-        elif method == 'semantic' and self.semantic_engine:
-            results = await self._semantic_search(processed_queries)
-        
-        elif method == 'hybrid':
-            results = await self._hybrid_search(processed_queries)
-        
-        else:
-            raise ValueError(f"Unsupported search method: {method}")
-        
+
+        try:
+            if method == 'fuzzy' and self.fuzzy_engine:
+                results = await self._fuzzy_search(processed_queries)
+
+            elif method == 'semantic' and self.semantic_engine:
+                results = await self._semantic_search(processed_queries)
+
+            elif method == 'hybrid':
+                results = await self._hybrid_search(processed_queries)
+
+            else:
+                raise ValueError(f"Unsupported search method: {method}")
+        except Exception as search_error:
+            logger.error(f"Error during search execution: {search_error}")
+            raise
+
         # Обогащение результатов
-        enriched_results = await self._enrich_results(results, queries)
+        try:
+            enriched_results = await self._enrich_results(results, queries)
+        except Exception as enrich_error:
+            logger.error(f"Error during result enrichment: {enrich_error}")
+            raise
         
         logger.info(f"Search completed. Found results for {len(enriched_results)} queries")
         
@@ -338,7 +443,7 @@ class AnalogSearchEngine:
     async def _preprocess_queries(self, queries: List[str]) -> List[str]:
         """Предобработка поисковых запросов"""
         processed_results = self.preprocessor.preprocess_batch(queries)
-        return [result['final_text'] for result in processed_results]
+        return [result['final_text'] if result['final_text'] is not None else "" for result in processed_results]
 
     async def _extract_query_parameters(self, queries: List[str]) -> List[Dict[str, Any]]:
         """Извлечение параметров из запросов"""
@@ -350,6 +455,12 @@ class AnalogSearchEngine:
             # Извлекаем параметры из запроса
             parameters = self.parameter_parser.parse_parameters(query)
             parameter_dict = self.parameter_parser.extract_parameters_dict(query)
+
+            # Проверяем на None значения
+            if parameters is None:
+                parameters = []
+            if parameter_dict is None:
+                parameter_dict = {}
 
             # Создаем расширенные данные запроса
             enhanced_query = {
@@ -373,7 +484,7 @@ class AnalogSearchEngine:
         for i, query in enumerate(queries):
             if query.strip():
                 search_results = self.fuzzy_engine.search(query, self.config.max_results_per_query)
-                results[f"query_{i}"] = search_results
+                results[f"query_{i}"] = search_results if search_results is not None else []
             else:
                 results[f"query_{i}"] = []
         
@@ -385,14 +496,31 @@ class AnalogSearchEngine:
         
         # Пакетный поиск для оптимизации
         batch_results = self.semantic_engine.batch_search(queries, self.config.max_results_per_query)
-        
+
+        # Проверяем, что batch_results не None
+        if batch_results is None:
+            batch_results = [[] for _ in queries]
+
         for i, query_results in enumerate(batch_results):
-            results[f"query_{i}"] = query_results
+            results[f"query_{i}"] = query_results if query_results is not None else []
         
         return results
     
     async def _hybrid_search(self, queries: List[str]) -> Dict[str, List[Dict[str, Any]]]:
-        """Гибридный поиск (комбинация нечеткого и семантического)"""
+        """Гибридный поиск с улучшенным скорингом и категориальной фильтрацией"""
+        results = {}
+
+        # Используем новый гибридный движок если доступен
+        if hasattr(self, 'hybrid_engine') and self.hybrid_engine and self.hybrid_engine.is_fitted:
+            for i, query in enumerate(queries):
+                if query.strip():
+                    search_results = self.hybrid_engine.search(query, self.config.max_results_per_query)
+                    results[f"query_{i}"] = search_results if search_results is not None else []
+                else:
+                    results[f"query_{i}"] = []
+            return results
+
+        # Fallback к старой логике комбинирования
         # Получаем результаты от нечеткого поиска
         fuzzy_results = await self._fuzzy_search(queries)
 
@@ -402,7 +530,7 @@ class AnalogSearchEngine:
         else:
             logger.info("Semantic search not available, using fuzzy search only")
             return fuzzy_results
-        
+
         # Комбинируем результаты
         combined_results = {}
         
@@ -438,35 +566,50 @@ class AnalogSearchEngine:
         
         return combined_results
     
-    async def _enrich_results(self, 
-                            results: Dict[str, List[Dict[str, Any]]], 
+    async def _enrich_results(self,
+                            results: Dict[str, List[Dict[str, Any]]],
                             original_queries: List[str]) -> Dict[str, List[Dict[str, Any]]]:
         """Обогащение результатов дополнительной информацией"""
         enriched = {}
-        
+
         for i, (key, query_results) in enumerate(results.items()):
             original_query = original_queries[i] if i < len(original_queries) else ""
             enriched_results = []
-            
-            for result in query_results:
-                # Получаем полную информацию о найденном элементе
-                doc_id = result.get('document_id')
-                if doc_id is not None and doc_id < len(self.processed_catalog):
-                    catalog_item = self.processed_catalog.iloc[doc_id].to_dict()
-                    
-                    # Обогащаем результат
-                    enriched_result = {
-                        **result,
-                        'original_query': original_query,
-                        'catalog_item': catalog_item,
-                        'timestamp': time.time()
-                    }
-                    
-                    # Добавляем извлеченные параметры если есть
-                    if 'extracted_parameters' in catalog_item:
-                        enriched_result['extracted_parameters'] = catalog_item['extracted_parameters']
-                    
-                    enriched_results.append(enriched_result)
+
+            # Проверяем, что query_results не None и не пустой
+            if query_results is None:
+                query_results = []
+
+            for j, result in enumerate(query_results):
+                try:
+                    if result is None:
+                        continue
+
+                    # Получаем полную информацию о найденном элементе
+                    doc_id = result.get('document_id')
+
+                    if doc_id is not None and self.processed_catalog is not None and doc_id < len(self.processed_catalog):
+                        catalog_item = self.processed_catalog.iloc[doc_id].to_dict()
+
+                        # Обогащаем результат
+                        enriched_result = {
+                            **result,
+                            'original_query': original_query,
+                            'catalog_item': catalog_item,
+                            'timestamp': time.time()
+                        }
+
+                        # Добавляем извлеченные параметры если есть
+                        if 'extracted_parameters' in catalog_item:
+                            enriched_result['extracted_parameters'] = catalog_item['extracted_parameters']
+
+                        enriched_results.append(enriched_result)
+                    else:
+                        # Skip results that can't be enriched
+                        continue
+                except Exception as result_error:
+                    logger.error(f"Error processing result {j}: {result_error}")
+                    continue
             
             enriched[original_query] = enriched_results
         
@@ -560,3 +703,123 @@ class AnalogSearchEngine:
         
         self.is_ready = True
         logger.info("Models loaded successfully")
+
+    def _search_analogs_sync(self, query: str, search_type: str, top_k: int, **kwargs) -> List[Dict[str, Any]]:
+        """
+        Синхронная версия поиска аналогов
+
+        Args:
+            query: Поисковый запрос
+            search_type: Тип поиска
+            top_k: Количество результатов
+            **kwargs: Дополнительные параметры
+
+        Returns:
+            Список результатов поиска
+        """
+        if not self.is_ready:
+            raise ValueError("Engine is not initialized. Call initialize() first.")
+
+        try:
+            # Предобработка запроса
+            processed_query = self._preprocessor.preprocess_text(query)
+            final_query = processed_query.get('final_text', query)
+
+            # Выбор поискового движка
+            if search_type == "fuzzy" and self.fuzzy_engine:
+                if hasattr(self.fuzzy_engine, 'is_fitted') and self.fuzzy_engine.is_fitted():
+                    results = self.fuzzy_engine.search(final_query, top_k, **kwargs)
+                else:
+                    logger.warning("Fuzzy engine not fitted, falling back to semantic")
+                    results = self._fallback_search(final_query, top_k, **kwargs)
+            elif search_type == "semantic" and self.semantic_engine:
+                if hasattr(self.semantic_engine, 'is_fitted') and self.semantic_engine.is_fitted:
+                    results = self.semantic_engine.search(final_query, top_k, **kwargs)
+                else:
+                    logger.warning("Semantic engine not fitted, falling back to fuzzy")
+                    results = self._fallback_search(final_query, top_k, **kwargs)
+            elif search_type == "hybrid" and self.hybrid_engine:
+                if hasattr(self.hybrid_engine, 'is_fitted') and self.hybrid_engine.is_fitted():
+                    results = self.hybrid_engine.search(final_query, top_k, **kwargs)
+                else:
+                    logger.warning("Hybrid engine not fitted, using fallback")
+                    results = self._fallback_search(final_query, top_k, **kwargs)
+            else:
+                # Fallback к доступному движку
+                results = self._fallback_search(final_query, top_k, **kwargs)
+
+            return results[:top_k]
+
+        except Exception as e:
+            logger.error(f"Error in synchronous search: {e}")
+            return []
+
+    def _fallback_search(self, query: str, top_k: int, **kwargs) -> List[Dict[str, Any]]:
+        """
+        Fallback поиск при недоступности основных движков
+
+        Args:
+            query: Поисковый запрос
+            top_k: Количество результатов
+            **kwargs: Дополнительные параметры
+
+        Returns:
+            Список результатов поиска
+        """
+        # Пробуем доступные движки в порядке приоритета
+        engines_to_try = [
+            ('semantic', self.semantic_engine),
+            ('fuzzy', self.fuzzy_engine),
+            ('hybrid', self.hybrid_engine)
+        ]
+
+        for engine_type, engine in engines_to_try:
+            if engine and hasattr(engine, 'is_fitted'):
+                try:
+                    if (hasattr(engine, 'is_fitted') and
+                        (callable(engine.is_fitted) and engine.is_fitted() or
+                         not callable(engine.is_fitted) and engine.is_fitted)):
+                        results = engine.search(query, top_k, **kwargs)
+                        logger.info(f"Fallback to {engine_type} engine successful")
+                        return results
+                except Exception as e:
+                    logger.warning(f"Fallback {engine_type} engine failed: {e}")
+                    continue
+
+        # Последний fallback - простой текстовый поиск
+        logger.warning("All engines failed, using simple text matching")
+        return self._simple_text_search(query, top_k)
+
+    def _simple_text_search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+        """
+        Простой текстовый поиск как последний fallback
+
+        Args:
+            query: Поисковый запрос
+            top_k: Количество результатов
+
+        Returns:
+            Список результатов простого поиска
+        """
+        if not self.processed_catalog:
+            return []
+
+        query_lower = query.lower()
+        results = []
+
+        for idx, row in self.processed_catalog.iterrows():
+            # Простое сравнение по вхождению подстроки
+            text_to_search = str(row.get('final_text', '')).lower()
+            if query_lower in text_to_search:
+                similarity = len(query_lower) / len(text_to_search) if text_to_search else 0
+                results.append({
+                    'document_id': idx,
+                    'document': str(row.get('original_text', '')),
+                    'similarity_score': similarity,
+                    'rank': len(results) + 1,
+                    'search_type': 'simple_text'
+                })
+
+        # Сортируем по схожести и возвращаем top_k
+        results.sort(key=lambda x: x['similarity_score'], reverse=True)
+        return results[:top_k]

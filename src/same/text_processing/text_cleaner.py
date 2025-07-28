@@ -20,6 +20,13 @@ class CleaningConfig:
     preserve_technical_terms: bool = True
     custom_patterns: List[str] = field(default_factory=list)
 
+    # Phase 1: Защищенные токены
+    preserve_protected_tokens: bool = True
+    protected_tokens: List[str] = field(default_factory=lambda: [
+        'ГОСТ', 'ТУ', 'ОСТ', 'СТО', 'DIN', 'ISO', 'DN', 'PN', 'RPM',
+        '°C', '°F', 'м³/ч', 'об/мин', 'кВт', 'МВт', 'кПа', 'МПа'
+    ])
+
 
 class TextCleaner:
     """Класс для очистки текста от различных артефактов"""
@@ -27,6 +34,11 @@ class TextCleaner:
     def __init__(self, config: CleaningConfig = None):
         self.config = config or CleaningConfig()
         self._compile_patterns()
+
+        # Phase 1: Инициализация защищенных токенов
+        self._protected_tokens_map = {}
+        if self.config.preserve_protected_tokens:
+            self._init_protected_tokens()
     
     def _compile_patterns(self):
         """Компиляция регулярных выражений для оптимизации"""
@@ -39,7 +51,50 @@ class TextCleaner:
             'technical_units': re.compile(r'\b\d+\s*(мм|см|м|кг|г|т|л|мл|В|А|Вт|кВт|МВт|Гц|кГц|МГц|ГГц|°C|°F|К|Па|кПа|МПа|ГПа|бар|атм|об/мин|м/с|км/ч)\b', re.IGNORECASE),
             'ocr_artifacts': re.compile(r'[|]{2,}|_{3,}|\.{4,}|—{2,}'),
         }
-    
+
+    def _init_protected_tokens(self):
+        """Инициализация защищенных токенов (Phase 1)"""
+        # Создаем временные маркеры для защищенных токенов
+        for i, token in enumerate(self.config.protected_tokens):
+            placeholder = f"__PROTECTED_TOKEN_{i}__"
+            self._protected_tokens_map[placeholder] = token
+
+        logger.info(f"Initialized {len(self._protected_tokens_map)} protected tokens for cleaning")
+
+    def _protect_tokens(self, text: str) -> str:
+        """Заменяет защищенные токены на временные маркеры"""
+        if not self.config.preserve_protected_tokens:
+            return text
+
+        protected_text = text
+        # Создаем обратную карту для замены
+        token_to_placeholder = {}
+        for placeholder, token in self._protected_tokens_map.items():
+            token_to_placeholder[token] = placeholder
+
+        # Заменяем токены на маркеры (case-insensitive, но с границами слов)
+        for token, placeholder in token_to_placeholder.items():
+            # Для токенов со спецсимволами не используем границы слов
+            if any(char in token for char in ['°', '³', '/', '-']):
+                pattern = re.compile(re.escape(token), re.IGNORECASE)
+            else:
+                # Используем границы слов для обычных токенов
+                pattern = re.compile(r'\b' + re.escape(token) + r'\b', re.IGNORECASE)
+            protected_text = pattern.sub(placeholder, protected_text)
+
+        return protected_text
+
+    def _restore_tokens(self, text: str) -> str:
+        """Восстанавливает защищенные токены из временных маркеров"""
+        if not self.config.preserve_protected_tokens:
+            return text
+
+        restored_text = text
+        for placeholder, token in self._protected_tokens_map.items():
+            restored_text = restored_text.replace(placeholder, token)
+
+        return restored_text
+
     def clean_text(self, text: str) -> Dict[str, str]:
         """
         Основной метод очистки текста
@@ -59,14 +114,17 @@ class TextCleaner:
             }
         
         result = {'raw': text}
-        
+
+        # Phase 1: Защита токенов перед очисткой
+        protected_text = self._protect_tokens(text)
+
         # Этап 1: Удаление HTML
         if self.config.remove_html:
-            cleaned = self._remove_html(text)
+            cleaned = self._remove_html(protected_text)
             result['html_cleaned'] = cleaned
         else:
-            result['html_cleaned'] = text
-        
+            result['html_cleaned'] = protected_text
+
         # Этап 2: Удаление спецсимволов
         if self.config.remove_special_chars:
             cleaned = self._remove_special_chars(result['html_cleaned'])
@@ -80,7 +138,10 @@ class TextCleaner:
             result['normalized'] = cleaned
         else:
             result['normalized'] = result['special_cleaned']
-        
+
+        # Phase 1: Восстановление защищенных токенов
+        result['normalized'] = self._restore_tokens(result['normalized'])
+
         return result
     
     def _remove_html(self, text: str) -> str:

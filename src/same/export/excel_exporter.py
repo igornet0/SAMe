@@ -4,6 +4,7 @@
 
 import logging
 from typing import Dict, List, Optional, Any, Union
+import json
 from dataclasses import dataclass
 import pandas as pd
 from openpyxl import Workbook
@@ -104,6 +105,10 @@ class ExcelExporter:
                 # Добавляем извлеченные параметры если есть
                 if 'extracted_parameters' in result:
                     row_data['Извлеченные параметры'] = self._format_parameters(result['extracted_parameters'])
+                    # Добавляем дополнительную колонку с исходным текстом параметров
+                    row_data['Исходный текст параметров'] = self._format_parameters_source_text(result['extracted_parameters'])
+                    # Добавляем структурированные параметры в JSON формате
+                    row_data['Структурированные параметры'] = self._format_parameters_json(result['extracted_parameters'])
                 
                 all_results.append(row_data)
         
@@ -188,11 +193,23 @@ class ExcelExporter:
     
     def _determine_search_type(self, result: Dict[str, Any]) -> str:
         """Определение типа поиска по результату"""
-        if 'similarity_score' in result:
-            return 'Семантический'
-        elif 'combined_score' in result:
+        # Проверяем явно указанный метод поиска (приоритет)
+        if 'search_method' in result:
+            method = result['search_method'].lower()
+            if method == 'hybrid':
+                return 'Гибридный'
+            elif method == 'semantic':
+                return 'Семантический'
+            elif method == 'fuzzy':
+                return 'Нечеткий'
+
+        # Fallback: определяем по наличию скоров
+        # Гибридный поиск имеет и similarity_score и combined_score
+        if ('similarity_score' in result and 'combined_score' in result) or 'hybrid_score' in result:
             return 'Гибридный'
-        elif 'fuzzy_score' in result:
+        elif 'similarity_score' in result:
+            return 'Семантический'
+        elif 'combined_score' in result or 'fuzzy_score' in result:
             return 'Нечеткий'
         else:
             return 'Неизвестный'
@@ -200,37 +217,156 @@ class ExcelExporter:
     def _format_additional_metrics(self, result: Dict[str, Any]) -> str:
         """Форматирование дополнительных метрик"""
         metrics = []
-        
+
+        # Гибридные метрики
+        if 'hybrid_score' in result:
+            metrics.append(f"Гибридный: {result['hybrid_score']:.3f}")
+
+        # Семантические метрики
+        if 'similarity_score' in result:
+            metrics.append(f"Семантический: {result['similarity_score']:.3f}")
+
         if 'cosine_score' in result:
             metrics.append(f"Косинус: {result['cosine_score']:.3f}")
-        
+
+        # Нечеткие метрики
+        if 'combined_score' in result:
+            metrics.append(f"Комбинированный: {result['combined_score']:.3f}")
+
         if 'fuzzy_score' in result:
-            metrics.append(f"Нечеткий: {result['fuzzy_score']}")
-        
+            # Проверяем тип значения (может быть int или float)
+            fuzzy_val = result['fuzzy_score']
+            if isinstance(fuzzy_val, (int, float)):
+                metrics.append(f"Нечеткий: {fuzzy_val:.3f}")
+            else:
+                metrics.append(f"Нечеткий: {fuzzy_val}")
+
         if 'levenshtein_score' in result:
-            metrics.append(f"Левенштейн: {result['levenshtein_score']}")
-        
+            metrics.append(f"Левенштейн: {result['levenshtein_score']:.3f}")
+
+        # Дополнительные метрики для гибридного поиска
+        if 'semantic_score' in result:
+            metrics.append(f"Сем.компонент: {result['semantic_score']:.3f}")
+
+        if 'fuzzy_rank' in result and result['fuzzy_rank'] is not None:
+            metrics.append(f"Ранг нечеткий: {result['fuzzy_rank']}")
+
+        if 'semantic_rank' in result and result['semantic_rank'] is not None:
+            metrics.append(f"Ранг семантический: {result['semantic_rank']}")
+
+        # Информация о стратегии комбинирования
+        if 'combination_strategy' in result:
+            strategy_names = {
+                'weighted_sum': 'Взвешенная сумма',
+                'rank_fusion': 'Слияние рангов',
+                'cascade': 'Каскадный'
+            }
+            strategy = strategy_names.get(result['combination_strategy'], result['combination_strategy'])
+            metrics.append(f"Стратегия: {strategy}")
+
         return '; '.join(metrics)
     
-    def _format_parameters(self, parameters: List[Dict[str, Any]]) -> str:
+    def _format_parameters(self, parameters) -> str:
         """Форматирование извлеченных параметров"""
         if not parameters:
             return ''
-        
+
+        # Handle case where parameters is a JSON string (serialized format)
+        if isinstance(parameters, str):
+            try:
+                parameters = json.loads(parameters)
+            except (json.JSONDecodeError, TypeError):
+                # If it's not valid JSON, return the string as-is
+                return str(parameters)
+
+        # Handle case where parameters is not a list
+        if not isinstance(parameters, list):
+            return str(parameters)
+
         formatted = []
         for param in parameters:
+            # Handle case where param is not a dictionary
+            if not isinstance(param, dict):
+                formatted.append(str(param))
+                continue
+
             name = param.get('name', '')
             value = param.get('value', '')
             unit = param.get('unit', '')
-            
+
             param_str = f"{name}: {value}"
             if unit:
                 param_str += f" {unit}"
-            
+
             formatted.append(param_str)
-        
+
         return '; '.join(formatted)
-    
+
+    def _format_parameters_source_text(self, parameters) -> str:
+        """Форматирование исходного текста параметров"""
+        if not parameters:
+            return ''
+
+        # Handle case where parameters is a JSON string (serialized format)
+        if isinstance(parameters, str):
+            try:
+                parameters = json.loads(parameters)
+            except (json.JSONDecodeError, TypeError):
+                return str(parameters)
+
+        # Handle case where parameters is not a list
+        if not isinstance(parameters, list):
+            return str(parameters)
+
+        source_texts = []
+        for param in parameters:
+            if not isinstance(param, dict):
+                continue
+
+            source_text = param.get('source_text', '')
+            if source_text:
+                source_texts.append(source_text)
+
+        return '; '.join(source_texts)
+
+    def _format_parameters_json(self, parameters) -> str:
+        """Форматирование параметров в JSON формате"""
+        if not parameters:
+            return ''
+
+        # Handle case where parameters is a JSON string (serialized format)
+        if isinstance(parameters, str):
+            try:
+                parameters = json.loads(parameters)
+            except (json.JSONDecodeError, TypeError):
+                return str(parameters)
+
+        # Handle case where parameters is not a list
+        if not isinstance(parameters, list):
+            return str(parameters)
+
+        # Create structured parameter data
+        structured_params = []
+        for param in parameters:
+            if not isinstance(param, dict):
+                continue
+
+            structured_param = {
+                'name': param.get('name', ''),
+                'value': param.get('value', ''),
+                'unit': param.get('unit', ''),
+                'confidence': param.get('confidence', 0.0),
+                'parameter_type': param.get('parameter_type', ''),
+                'position': param.get('position', [])
+            }
+            structured_params.append(structured_param)
+
+        # Return as formatted JSON string
+        try:
+            return json.dumps(structured_params, ensure_ascii=False, indent=None)
+        except Exception:
+            return str(structured_params)
+
     def _apply_results_styling(self, ws: Worksheet, df: pd.DataFrame):
         """Применение стилей к листу результатов"""
         # Стиль заголовка

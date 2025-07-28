@@ -3,6 +3,9 @@
 """
 
 import logging
+import asyncio
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from multiprocessing import cpu_count
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 import pandas as pd
@@ -22,6 +25,11 @@ class PreprocessorConfig:
     normalizer_config: Optional[NormalizerConfig] = None
     save_intermediate_steps: bool = True
     batch_size: int = 1000
+    # Параметры параллельной обработки
+    enable_parallel_processing: bool = True
+    max_workers: Optional[int] = None  # None = auto-detect
+    parallel_threshold: int = 100  # Минимальное количество текстов для параллельной обработки
+    chunk_size: int = 50  # Размер чанка для каждого процесса
 
 
 class TextPreprocessor:
@@ -29,13 +37,20 @@ class TextPreprocessor:
     
     def __init__(self, config: PreprocessorConfig = None):
         self.config = config or PreprocessorConfig()
-        
+
         # Инициализация компонентов
         self.cleaner = TextCleaner(self.config.cleaning_config)
         self.lemmatizer = Lemmatizer(self.config.lemmatizer_config)
         self.normalizer = TextNormalizer(self.config.normalizer_config)
-        
-        logger.info("TextPreprocessor initialized")
+
+        # Настройка параллельной обработки
+        if self.config.max_workers is None:
+            self.config.max_workers = min(cpu_count(), 4)  # Ограничиваем максимум 4 процессами
+
+        self._process_executor = None
+        self._thread_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="preprocessor")
+
+        logger.info(f"TextPreprocessor initialized with max_workers={self.config.max_workers}")
     
     def preprocess_text(self, text: str) -> Dict[str, Any]:
         """
@@ -92,12 +107,20 @@ class TextPreprocessor:
         Returns:
             Список результатов обработки
         """
-        # Простая синхронная реализация для обратной совместимости
-        results = []
-        for text in texts:
-            result = self.preprocess_text(text)
-            results.append(result)
-        return results
+        if not texts:
+            return []
+
+        # Используем параллельную обработку для больших датасетов
+        if (self.config.enable_parallel_processing and
+            len(texts) >= self.config.parallel_threshold):
+            return self._preprocess_batch_parallel(texts)
+        else:
+            # Простая синхронная реализация для малых датасетов
+            results = []
+            for text in texts:
+                result = self.preprocess_text(text)
+                results.append(result)
+            return results
 
     async def preprocess_batch_async(self, texts: List[str]) -> List[Dict[str, Any]]:
         """
@@ -111,6 +134,14 @@ class TextPreprocessor:
         """
         if not texts:
             return []
+
+        # Для больших датасетов используем параллельную обработку в ThreadPoolExecutor
+        if (self.config.enable_parallel_processing and
+            len(texts) >= self.config.parallel_threshold):
+
+            logger.info(f"Starting async parallel processing: {len(texts)} texts")
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(self._thread_executor, self._preprocess_batch_parallel, texts)
 
         results = []
         batch_size = self.config.batch_size
@@ -251,7 +282,58 @@ class TextPreprocessor:
             stats.update(lemma_stats)
         
         return stats
-    
+
+    def _preprocess_batch_parallel(self, texts: List[str]) -> List[Dict[str, Any]]:
+        """Параллельная обработка текстов с использованием ProcessPoolExecutor"""
+        logger.info(f"Starting parallel processing of {len(texts)} texts")
+
+        # Разбиваем тексты на чанки
+        chunks = self._split_into_chunks(texts, self.config.chunk_size)
+
+        try:
+            # Создаем ProcessPoolExecutor только когда нужно
+            if self._process_executor is None:
+                self._process_executor = ProcessPoolExecutor(max_workers=self.config.max_workers)
+
+            # Отправляем чанки на обработку
+            future_to_chunk = {}
+            for i, chunk in enumerate(chunks):
+                future = self._process_executor.submit(_process_chunk_worker, chunk, self.config)
+                future_to_chunk[future] = i
+
+            # Собираем результаты в правильном порядке
+            chunk_results = [None] * len(chunks)
+            for future in as_completed(future_to_chunk):
+                chunk_index = future_to_chunk[future]
+                try:
+                    chunk_results[chunk_index] = future.result()
+                except Exception as e:
+                    logger.error(f"Error processing chunk {chunk_index}: {e}")
+                    # Fallback к синхронной обработке для этого чанка
+                    chunk = chunks[chunk_index]
+                    chunk_results[chunk_index] = [self.preprocess_text(text) for text in chunk]
+
+            # Объединяем результаты всех чанков
+            results = []
+            for chunk_result in chunk_results:
+                if chunk_result:
+                    results.extend(chunk_result)
+
+            logger.info(f"Parallel processing completed: {len(results)} results")
+            return results
+
+        except Exception as e:
+            logger.error(f"Parallel processing failed: {e}, falling back to sequential")
+            # Fallback к синхронной обработке
+            return [self.preprocess_text(text) for text in texts]
+
+    def _split_into_chunks(self, texts: List[str], chunk_size: int) -> List[List[str]]:
+        """Разбивает список текстов на чанки заданного размера"""
+        chunks = []
+        for i in range(0, len(texts), chunk_size):
+            chunks.append(texts[i:i + chunk_size])
+        return chunks
+
     def get_processing_summary(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Получение сводной статистики обработки"""
         total_texts = len(results)
@@ -277,3 +359,88 @@ class TextPreprocessor:
             'average_compression': round(avg_compression, 2),
             'failed_processing': total_texts - successful
         }
+
+    def __del__(self):
+        """Корректное закрытие пулов процессов и потоков при удалении объекта"""
+        if hasattr(self, '_process_executor') and self._process_executor:
+            try:
+                self._process_executor.shutdown(wait=False)
+            except Exception:
+                pass
+
+        if hasattr(self, '_thread_executor') and self._thread_executor:
+            try:
+                self._thread_executor.shutdown(wait=False)
+            except Exception:
+                pass
+
+
+def _process_chunk_worker(texts_chunk: List[str], config: PreprocessorConfig) -> List[Dict[str, Any]]:
+    """
+    Функция-воркер для обработки чанка текстов в отдельном процессе
+
+    Args:
+        texts_chunk: Чанк текстов для обработки
+        config: Конфигурация предобработчика
+
+    Returns:
+        Список результатов обработки
+    """
+    try:
+        # Создаем новый экземпляр предобработчика в процессе
+        # Отключаем параллельную обработку чтобы избежать рекурсии
+        worker_config = PreprocessorConfig(
+            cleaning_config=config.cleaning_config,
+            lemmatizer_config=config.lemmatizer_config,
+            normalizer_config=config.normalizer_config,
+            save_intermediate_steps=config.save_intermediate_steps,
+            batch_size=config.batch_size,
+            enable_parallel_processing=False  # Важно: отключаем параллельную обработку
+        )
+
+        preprocessor = TextPreprocessor(worker_config)
+
+        # Обрабатываем тексты последовательно в этом процессе
+        results = []
+        for text in texts_chunk:
+            try:
+                result = preprocessor.preprocess_text(text)
+                results.append(result)
+            except Exception as e:
+                # Добавляем результат с ошибкой
+                results.append({
+                    'original_text': text,
+                    'processing_successful': False,
+                    'error': str(e),
+                    'cleaned_text': text,
+                    'normalized_text': text,
+                    'lemmatization': {
+                        'original': text,
+                        'lemmatized': text,
+                        'tokens': [],
+                        'lemmas': [],
+                        'pos_tags': [],
+                        'filtered_lemmas': []
+                    }
+                })
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Worker process failed: {e}")
+        # Возвращаем результаты с ошибками для всех текстов
+        return [{
+            'original_text': text,
+            'processing_successful': False,
+            'error': str(e),
+            'cleaned_text': text,
+            'normalized_text': text,
+            'lemmatization': {
+                'original': text,
+                'lemmatized': text,
+                'tokens': [],
+                'lemmas': [],
+                'pos_tags': [],
+                'filtered_lemmas': []
+            }
+        } for text in texts_chunk]

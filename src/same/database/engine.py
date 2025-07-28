@@ -51,9 +51,8 @@ async def select_working_url() -> str:
         if await test_connection(url):
             logger.info(f"Using {name} database: {url}")
             return url
-    
-    logger.critical("All database connections failed. Exiting application.")
-    sys.exit(1)
+
+    raise ConnectionError("All database connections failed. Exiting application.")
 
 class Database:
 

@@ -188,6 +188,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+.vscode
 
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
@@ -204,6 +205,7 @@ temp/
 logs/
 cache/
 pgadmin/
+models/
 
 # Alembic versions (except template)
 alembic/versions/*.py

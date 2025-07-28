@@ -76,7 +76,7 @@ class MLParameterExtractor:
         except OSError:
             logger.warning(f"SpaCy model {self.config.spacy_model} not found, using sm model")
             try:
-                self.nlp = spacy.load("ru_core_news_sm")
+                self.nlp = spacy.load("ru_core_news_lg")
             except OSError:
                 logger.error("No Russian SpaCy model found. Please install: python -m spacy download ru_core_news_lg")
                 raise

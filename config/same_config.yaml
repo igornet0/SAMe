@@ -45,6 +45,8 @@ text_processing:
     preserve_technical_terms: true
     min_token_length: 2
     preserve_numbers: true
+    normalize_product_variants: true
+    preserve_professional_terms: true
     
   # Нормализация
   normalization:
@@ -53,6 +55,10 @@ text_processing:
     unify_technical_terms: true
     remove_brand_names: false
     standardize_numbers: true
+    reduce_numeric_weight: true
+    numeric_token_replacement: "<NUM>"
+    preserve_units_with_numbers: true
+    normalize_ranges: true
     
   # Общие настройки предобработки
   preprocessor:
@@ -93,6 +99,19 @@ search_engine:
     batch_size: 32
     normalize_embeddings: true
     use_gpu: false
+    # Категориальная фильтрация
+    enable_category_filtering: true
+    category_similarity_threshold: 0.7
+    max_category_candidates: 1000
+    # Улучшенное скоринг
+    enable_enhanced_scoring: true
+    numeric_token_weight: 0.3
+    semantic_weight: 0.6
+    lexical_weight: 0.3
+    key_term_weight: 0.1
+    # Кэширование
+    enable_cache: true
+    cache_size: 1000
     
   # Гибридный поиск
   hybrid_search:
@@ -102,6 +121,11 @@ search_engine:
     min_semantic_score: 0.4
     max_candidates_per_method: 50
     combination_strategy: "weighted_sum"  # weighted_sum, rank_fusion, cascade
+    # Категориальная фильтрация
+    enable_category_filtering: true
+    # Параллельное выполнение
+    enable_parallel_search: true
+    max_workers: 2
     
   # Индексация
   indexing:
@@ -115,6 +139,17 @@ search_engine:
     enable_cache: true
     cache_size: 10000
     enable_incremental_updates: true
+
+# Настройки категоризации
+categorization:
+  # Классификатор категорий
+  category_classifier:
+    use_keyword_matching: true
+    use_pattern_matching: true
+    min_confidence: 0.6
+    default_category: "общие_товары"
+    enable_fuzzy_matching: true
+    fuzzy_threshold: 0.8
 
 # Настройки извлечения параметров
 parameter_extraction:

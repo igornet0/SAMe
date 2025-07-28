@@ -19,6 +19,12 @@ class NormalizerConfig:
     remove_brand_names: bool = False
     standardize_numbers: bool = True
 
+    # Настройки для обработки числовых токенов
+    reduce_numeric_weight: bool = True
+    numeric_token_replacement: str = "<NUM>"  # Заменять числа на токен
+    preserve_units_with_numbers: bool = True  # Сохранять "10 мм", "5 кг" и т.д.
+    normalize_ranges: bool = True  # "10-15" -> "<NUM>-<NUM>"
+
 
 class TextNormalizer:
     """Класс для нормализации технических наименований"""
@@ -133,8 +139,14 @@ class TextNormalizer:
             }
         
         result = {'original': text}
-        current_text = text.lower()
-        
+        # ИСПРАВЛЕНИЕ: НЕ приводим весь текст к нижнему регистру
+        # Это разрушает марки материалов и бренды
+        current_text = text  # Сохраняем оригинальный регистр
+
+        # ИСПРАВЛЕНИЕ: Глобальная защита марок материалов от разрушения
+        protected_materials = {}
+        current_text = self._protect_material_grades_global(current_text, protected_materials)
+
         # Этап 1: Нормализация единиц измерения
         if self.config.standardize_units:
             current_text = self._normalize_units(current_text)
@@ -156,10 +168,21 @@ class TextNormalizer:
         else:
             result['terms_unified'] = current_text
         
-        # Этап 4: Финальная очистка
+        # Этап 4: Обработка числовых токенов
+        if self.config.reduce_numeric_weight:
+            current_text = self._process_numeric_tokens(current_text)
+            result['numeric_processed'] = current_text
+        else:
+            result['numeric_processed'] = current_text
+
+        # Этап 5: Финальная очистка
         current_text = self._final_cleanup(current_text)
+
+        # ИСПРАВЛЕНИЕ: Восстанавливаем защищенные марки материалов
+        current_text = self._restore_protected_materials_global(current_text, protected_materials)
+
         result['final_normalized'] = current_text
-        
+
         return result
     
     def _normalize_units(self, text: str) -> str:
@@ -181,7 +204,73 @@ class TextNormalizer:
         text = self.patterns['number_unit'].sub(replace_number_unit, text)
         
         return text
-    
+
+    def _process_numeric_tokens(self, text: str) -> str:
+        """Обработка числовых токенов для снижения их веса в поиске"""
+        if not self.config.reduce_numeric_weight:
+            return text
+
+        # ИСПРАВЛЕНИЕ: Защищаем марки материалов от разрушения
+        protected_materials = []
+        material_patterns = [
+            # Марки стали: 09Г2С-14, 12Х18Н10Т, 20Х23Н18
+            r'\b\d{2}[А-Я]\d*[А-Я]*-?\d*\b',
+            # Стандартные стали: Ст3пс, Ст20, У8А
+            r'\b[СУ]т?\d+[а-я]*\b',
+            # Легированные стали: 40Х, 45ХН, 30ХГСА
+            r'\b\d{2}[ХГСНМТВКЮЛБЦЧФЭРАИОУЫЯЕЁЖЗШЩЪЬЭЮЯхгснмтвкюлбцчфэраиоуыяеёжзшщъьэюя]+\b',
+            # Цветные сплавы: АМг6, Д16Т, ВТ1-0
+            r'\b[АВДЛМ][А-Я]*\d+[А-Я]*-?\d*\b',
+        ]
+
+        def protect_material(match):
+            material = match.group(0)
+            # Проверяем, что это действительно марка материала
+            if (len(material) >= 3 and
+                not material.isdigit() and
+                material.lower() not in ['гост', 'дин', 'iso']):
+                protected_materials.append(material)
+                return f"__MATERIAL_{len(protected_materials)-1}__"
+            return material
+
+        # Защищаем марки материалов
+        for pattern in material_patterns:
+            text = re.sub(pattern, protect_material, text, flags=re.IGNORECASE)
+
+        # Сохраняем числа с единицами измерения если нужно
+        if self.config.preserve_units_with_numbers:
+            # Заменяем числа без единиц на токены, но сохраняем с единицами
+            # Сначала защищаем числа с единицами
+            protected_patterns = []
+
+            # Находим все числа с единицами и заменяем их временными маркерами
+            unit_pattern = r'(\d+(?:[.,]\d+)?)\s*(мм|см|м|км|кг|г|т|л|мл|В|А|Вт|кВт|МВт|Гц|кГц|МГц|ГГц|°C|°F|К|Па|кПа|МПа|ГПа|бар|атм|об/мин|м/с|км/ч)\b'
+
+            def protect_units(match):
+                protected_patterns.append(match.group(0))
+                return f"__PROTECTED_{len(protected_patterns)-1}__"
+
+            text = re.sub(unit_pattern, protect_units, text, flags=re.IGNORECASE)
+
+        # Обрабатываем диапазоны
+        if self.config.normalize_ranges:
+            text = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)\b',
+                         f'{self.config.numeric_token_replacement}-{self.config.numeric_token_replacement}', text)
+
+        # Заменяем оставшиеся отдельные числа
+        text = re.sub(r'\b\d+(?:[.,]\d+)?\b', self.config.numeric_token_replacement, text)
+
+        # Восстанавливаем защищенные числа с единицами
+        if self.config.preserve_units_with_numbers:
+            for i, pattern in enumerate(protected_patterns):
+                text = text.replace(f"__PROTECTED_{i}__", pattern)
+
+        # ИСПРАВЛЕНИЕ: Восстанавливаем защищенные марки материалов
+        for i, material in enumerate(protected_materials):
+            text = text.replace(f"__MATERIAL_{i}__", material)
+
+        return text
+
     def _normalize_abbreviations(self, text: str) -> str:
         """Нормализация аббревиатур"""
         for abbr, full_form in self.abbreviation_mappings.items():
@@ -251,3 +340,57 @@ class TextNormalizer:
             'compression_ratio': round((len(original) - len(normalized)) / len(original) * 100, 2) if original else 0,
             'extracted_specs': len(self.extract_technical_specs(original))
         }
+
+    def _protect_material_grades_global(self, text: str, protected_materials: dict) -> str:
+        """
+        ИСПРАВЛЕНИЕ: Глобальная защита марок материалов от разрушения на всех этапах нормализации
+        Примеры: 09Г2С-14, 12Х18Н10Т, Ст3пс, 40Х, 20Х23Н18
+        """
+        # Паттерны для марок материалов
+        material_patterns = [
+            # Марки стали: 09Г2С-14, 12Х18Н10Т, 20Х23Н18
+            r'\b\d{2}[А-Я]\d*[А-Я]*-?\d*\b',
+            # Стандартные стали: Ст3пс, Ст20, У8А
+            r'\b[СУ]т?\d+[а-я]*\b',
+            # Легированные стали: 40Х, 45ХН, 30ХГСА
+            r'\b\d{2}[ХГСНМТВКЮЛБЦЧФЭРАИОУЫЯЕЁЖЗШЩЪЬЭЮЯхгснмтвкюлбцчфэраиоуыяеёжзшщъьэюя]+\b',
+            # Цветные сплавы: АМг6, Д16Т, ВТ1-0
+            r'\b[АВДЛМ][А-Я]*\d+[А-Я]*-?\d*\b',
+            # Дополнительные марки: Ц6Хр, 09Г2С
+            r'\b[А-Я]\d+[А-Я][а-я]*\b',
+        ]
+
+        protected_text = text
+        material_counter = 0
+
+        for pattern in material_patterns:
+            def protect_material(match):
+                nonlocal material_counter
+                material = match.group(0)
+
+                # Проверяем, что это действительно марка материала
+                if (len(material) >= 3 and
+                    not material.isdigit() and
+                    material.upper() not in ['ГОСТ', 'ДИН', 'ISO', 'ТУ', 'ACME', 'TMK', 'FMC']):
+
+                    placeholder = f"__GLOBAL_MATERIAL_{material_counter}__"
+                    protected_materials[placeholder] = material
+                    material_counter += 1
+                    return placeholder
+
+                return material
+
+            protected_text = re.sub(pattern, protect_material, protected_text, flags=re.IGNORECASE)
+
+        return protected_text
+
+    def _restore_protected_materials_global(self, text: str, protected_materials: dict) -> str:
+        """
+        ИСПРАВЛЕНИЕ: Восстанавливает глобально защищенные марки материалов
+        """
+        restored_text = text
+
+        for placeholder, material in protected_materials.items():
+            restored_text = restored_text.replace(placeholder, material)
+
+        return restored_text

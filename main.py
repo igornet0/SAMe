@@ -1,38 +1,38 @@
 #!/usr/bin/env python3
 """
-SAMe Project - Main Pipeline Entry Point
+Проект SAMe - Главная точка входа конвейера
 
-This script implements a complete end-to-end pipeline for the SAMe (Search Analog Model Engine) project:
+Этот скрипт реализует полный сквозной конвейер для проекта SAMe (Search Analog Model Engine):
 
-WORKFLOW STEPS:
-1. Data Loading: Load nomenclature data from data/input/main_dataset.xlsx
-2. Data Processing: Process the loaded data and save to data/processed/
-3. Model Training: Train similarity search models and save to src/models/
-4. Interactive Query Mode: Allow users to search for similar items
-5. Model Persistence: Load existing models if available (skips training if found)
+ЭТАПЫ РАБОТЫ:
+1. Загрузка данных: Загрузка номенклатурных данных из data/input/main_dataset.xlsx
+2. Обработка данных: Обработка загруженных данных и сохранение в data/processed/
+3. Обучение моделей: Обучение моделей поиска по сходству и сохранение в src/models/
+4. Интерактивный режим запросов: Позволяет пользователям искать похожие элементы
+5. Сохранение моделей: Загрузка существующих моделей при наличии (пропускает обучение)
 
-FEATURES:
-- Automatic model persistence and loading
-- Interactive search interface
-- Excel export with standard columns (Raw_Name, Cleaned_Name, Lemmatized_Name,
+ВОЗМОЖНОСТИ:
+- Автоматическое сохранение и загрузка моделей
+- Интерактивный интерфейс поиска
+- Экспорт в Excel со стандартными колонками (Raw_Name, Cleaned_Name, Lemmatized_Name,
   Normalized_Name, Candidate_Name, Similarity_Score, Relation_Type,
   Suggested_Category, Final_Decision, Comment)
-- Backward compatibility with existing SAMe API structure
-- Uses current same.* module import structure
-- Comprehensive logging and error handling
+- Обратная совместимость с существующей структурой API SAMe
+- Использует текущую структуру импорта модулей same.*
+- Комплексное логирование и обработка ошибок
 
-USAGE:
+ИСПОЛЬЗОВАНИЕ:
     python main.py
 
-REQUIREMENTS:
-- data/input/main_dataset.xlsx must exist
-- All SAMe dependencies must be installed
-- Sufficient disk space for processed data and models
+ТРЕБОВАНИЯ:
+- Должен существовать файл data/input/main_dataset.xlsx
+- Все зависимости SAMe должны быть установлены
+- Достаточно места на диске для обработанных данных и моделей
 
-OUTPUT DIRECTORIES:
-- data/processed/: Processed data files (parquet format)
-- src/models/: Trained model artifacts and configuration
-- data/output/: Excel export files from search results
+ВЫХОДНЫЕ ДИРЕКТОРИИ:
+- data/processed/: Файлы обработанных данных (формат parquet)
+- src/models/: Артефакты обученных моделей и конфигурация
+- data/output/: Файлы экспорта Excel из результатов поиска
 """
 
 import asyncio
@@ -54,12 +54,16 @@ from same.data_manager import data_helper
 from same.settings import settings
 
 # Configure logging
+project_root = Path(__file__).parent.resolve()
+logs_dir = project_root / "src" / "logs"
+logs_dir.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='[%(asctime)s] %(name)-45s:%(lineno)-3d - %(levelname)-7s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('logs/main_pipeline.log')
+        logging.FileHandler(logs_dir / 'main_pipeline.log')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -71,10 +75,15 @@ class SAMePipeline:
     def __init__(self):
         self.engine: Optional[AnalogSearchEngine] = None
         self.processed_data: Optional[pd.DataFrame] = None
-        self.models_dir = Path("src/models")
-        self.data_input_dir = Path("data/input")
-        self.data_processed_dir = Path("data/processed")
-        self.data_output_dir = Path("data/output")
+
+        # Get the project root directory (where main.py is located)
+        self.project_root = Path(__file__).parent.resolve()
+
+        # Define paths relative to src directory (data and logs now in src/)
+        self.models_dir = (self.project_root / "src" / "models").resolve()
+        self.data_input_dir = (self.project_root / "src" / "data" / "input").resolve()
+        self.data_processed_dir = (self.project_root / "src" / "data" / "processed").resolve()
+        self.data_output_dir = (self.project_root / "src" / "data" / "output").resolve()
 
         # Ensure directories exist
         for directory in [self.models_dir, self.data_processed_dir, self.data_output_dir]:
@@ -87,7 +96,7 @@ class SAMePipeline:
         logger.info(f"   Output: {self.data_output_dir}")
 
     def _serialize_parameters(self, parameters):
-        """Convert ExtractedParameter objects to serializable format"""
+        """Convert ExtractedParameter objects to serializable format for Parquet"""
         if parameters is None or len(parameters) == 0:
             return None
 
@@ -110,12 +119,14 @@ class SAMePipeline:
                         serialized.append(param_dict)
                     else:
                         serialized.append(str(param))
-                return serialized
+
+                # Return JSON string for Parquet compatibility
+                return json.dumps(serialized, ensure_ascii=False)
             else:
                 return str(parameters)
         except Exception as e:
             logger.warning(f"Failed to serialize parameters: {e}")
-            return str(parameters)
+            return str(parameters) if parameters else None
 
     def check_prerequisites(self) -> bool:
         """Check if all prerequisites are met"""
@@ -160,16 +171,22 @@ class SAMePipeline:
         logger.info("🔄 Step 2: Processing data...")
 
         try:
-            # Create search engine configuration
+            # Create enhanced search engine configuration
             config = AnalogSearchConfig(
                 search_method="hybrid",
                 similarity_threshold=0.6,
                 max_results_per_query=50,
                 enable_parameter_extraction=True,
-                data_dir=Path("data"),
+                data_dir=self.project_root / "src" / "data",
                 models_dir=self.models_dir,
                 output_dir=self.data_output_dir
             )
+
+            logger.info("🔧 Enhanced search features enabled:")
+            logger.info("  - Categorical pre-filtering for better relevance")
+            logger.info("  - Reduced numeric token weight to prevent false matches")
+            logger.info("  - Improved Russian morphological processing")
+            logger.info("  - Multi-metric scoring (semantic + lexical + key terms)")
 
             # Initialize search engine for processing
             self.engine = AnalogSearchEngine(config)
@@ -259,13 +276,16 @@ class SAMePipeline:
             return False
         
         try:
-            # Create search engine with default config
+            # Create enhanced search engine with default config
             config = AnalogSearchConfig(
                 search_method="hybrid",
                 similarity_threshold=0.6,
+                data_dir=self.project_root / "src" / "data",
                 models_dir=self.models_dir,
                 output_dir=self.data_output_dir
             )
+
+            logger.info("🚀 Loading models with enhanced search capabilities")
 
             self.engine = AnalogSearchEngine(config)
 
@@ -283,15 +303,35 @@ class SAMePipeline:
             processed_files.extend(list(self.data_processed_dir.glob("processed_data_*.csv")))
 
             if processed_files:
-                latest_file = max(processed_files, key=lambda x: x.stat().st_mtime)
+                # Sort files by modification time (newest first) and find the first non-empty file
+                processed_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+                latest_file = None
+                for file_path in processed_files:
+                    if file_path.stat().st_size > 0:  # Skip empty files
+                        latest_file = file_path
+                        break
+
+                if latest_file is None:
+                    logger.warning("All processed data files are empty")
+                    return False
+
                 file_format = "parquet" if latest_file.suffix == ".parquet" else "csv"
                 self.processed_data = await data_helper.read_file(latest_file, format=file_format)
                 logger.info(f"📊 Loaded processed data: {latest_file}")
 
+                # CRITICAL FIX: Set the processed_catalog in the search engine
+                self.engine.processed_catalog = self.processed_data
+                self.engine.catalog_data = self.processed_data  # Also set the original catalog data
+                logger.info(f"✅ Search engine initialized with processed catalog: {len(self.processed_data)} items")
+            else:
+                logger.warning("No processed data files found")
+                return False
+
             return True
 
         except Exception as e:
-            logger.error(f"❌ Error loading existing models: {e}")
+            logger.error(f"❌ Error loading existing models: {str(e)[:40]}")
             return False
     
     async def interactive_query_mode(self):
@@ -330,15 +370,20 @@ class SAMePipeline:
                 
                 # Search for analogs
                 print(f"🔄 Searching for: '{query}'...")
-                results = await self.engine.search_analogs([query])
-                
-                if query in results and results[query]:
+                try:
+                    results = await self.engine.search_analogs([query])
+                except Exception as search_error:
+                    logger.error(f"Error during search_analogs: {search_error}")
+                    results = None
+
+                # Check if results exist and are not None
+                if results and query in results and results[query] is not None and len(results[query]) > 0:
                     print(f"\n✅ Found {len(results[query])} similar items:")
                     for i, result in enumerate(results[query][:10], 1):
                         score = result.get('similarity_score', result.get('combined_score', 0))
                         document = result.get('document', 'Unknown')
                         print(f"   {i}. {document} (Score: {score:.3f})")
-                    
+
                     # Ask if user wants to export results
                     export = input(f"\n💾 Export results to Excel? (y/n): ").strip().lower()
                     if export in ['y', 'yes']:

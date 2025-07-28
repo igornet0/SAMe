@@ -26,7 +26,7 @@ make install-dev
 python -m spacy download ru_core_news_lg
 
 # Альтернативно, если модель недоступна
-python -m spacy download ru_core_news_sm
+python -m spacy download ru_core_news_lg
 ```
 
 ### 3. Установка дополнительных зависимостей для ML

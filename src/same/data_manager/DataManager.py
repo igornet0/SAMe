@@ -26,16 +26,16 @@ logger = logging.getLogger("DataManager")
 
 class SettingsTrade(BaseSettings):
 
-    # Пути к данным
-    BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
-    DATA_DIR: Path = BASE_DIR / "data"
+    # Пути к данным - перемещаем data и logs в src/
+    # __file__ = src/same/data_manager/DataManager.py
+    # .parent.parent.parent.parent = корень проекта
+    BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent.parent
+    DATA_DIR: Path = BASE_DIR / "src" / "data"
 
-    DATASET_DATA_PATH: Path = DATA_DIR / "datasets"
+    LOG_PATH: Path = BASE_DIR / "src" / "logs"
 
-    LOG_PATH: Path = DATA_DIR / "log"
-
-    # Модели ML
-    MODELS_DIR: Path = BASE_DIR / "models"
+    # Модели ML - в src/models
+    MODELS_DIR: Path = BASE_DIR / "src" / "models"
     MODELS_CONFIGS_PATH: Path = MODELS_DIR / "configs"
     MODELS_LOGS_PATH: Path = MODELS_DIR / "logs"
 
@@ -46,7 +46,6 @@ class DataManager:
     def __init__(self):
         self.required_dirs = {
             "data": self.settings.DATA_DIR,
-            "datasets": self.settings.DATASET_DATA_PATH,
             "log": self.settings.LOG_PATH,
             "models": self.settings.MODELS_DIR,
             "models logs": self.settings.MODELS_LOGS_PATH,
@@ -116,7 +115,7 @@ class DataManager:
             logger.warning(f"File not found: {path}")
             return pd.DataFrame()
         except Exception as e:
-            logger.error(f"Error reading file {path}: {str(e)}")
+            logger.error(f"Error reading file {path}: {str(e)[:40]}")
             raise
 
     async def write_file(
@@ -342,11 +341,21 @@ class DataManager:
         save_dir = self.settings.DATA_DIR / "processed" / "parameters"
         save_dir.mkdir(parents=True, exist_ok=True)
 
+        # Создаем копию данных для сериализации
+        data_to_save = data.copy()
+
+        # Сериализуем ExtractedParameter объекты в колонке параметров
+        if parameters_column in data_to_save.columns:
+            logger.info(f"Serializing {parameters_column} column for Parquet compatibility...")
+            data_to_save[parameters_column] = data_to_save[parameters_column].apply(
+                self._serialize_parameters_for_parquet
+            )
+
         # Сохраняем основные данные
         main_filename = f"{dataset_name}_{version}.parquet"
         main_path = save_dir / main_filename
 
-        await self.write_file(data, main_path, format="parquet")
+        await self.write_file(data_to_save, main_path, format="parquet")
 
         # Создаем сводку по параметрам если доступны утилиты
         if ParameterAnalyzer and parameters_column in data.columns:
@@ -369,6 +378,78 @@ class DataManager:
 
         logger.info(f"Parameters data saved to {main_path}")
         return main_path
+
+    def _serialize_parameters_for_parquet(self, parameters):
+        """
+        Сериализация ExtractedParameter объектов для совместимости с Parquet
+
+        Args:
+            parameters: Список ExtractedParameter объектов или другие данные
+
+        Returns:
+            Сериализованные данные (список словарей или строка)
+        """
+        if not parameters:
+            return None
+
+        try:
+            # Если это список ExtractedParameter объектов
+            if isinstance(parameters, list):
+                serialized = []
+                for param in parameters:
+                    if hasattr(param, '__dict__') and hasattr(param, 'name'):
+                        # Конвертируем ExtractedParameter в словарь
+                        param_dict = {
+                            'name': param.name,
+                            'value': param.value,
+                            'unit': param.unit,
+                            'parameter_type': param.parameter_type.value if hasattr(param.parameter_type, 'value') else str(param.parameter_type),
+                            'confidence': param.confidence,
+                            'source_text': param.source_text,
+                            'position': param.position
+                        }
+                        serialized.append(param_dict)
+                    else:
+                        # Если это уже словарь или другой сериализуемый объект
+                        serialized.append(param if isinstance(param, dict) else str(param))
+
+                # Возвращаем JSON строку для совместимости с Parquet
+                return json.dumps(serialized, ensure_ascii=False)
+            else:
+                # Если это не список, возвращаем как строку
+                return str(parameters)
+
+        except Exception as e:
+            logger.warning(f"Failed to serialize parameters: {e}")
+            return str(parameters) if parameters else None
+
+    def _deserialize_parameters_from_parquet(self, serialized_data):
+        """
+        Десериализация параметров из Parquet формата
+
+        Args:
+            serialized_data: JSON строка с сериализованными параметрами
+
+        Returns:
+            Список словарей с параметрами или None
+        """
+        if not serialized_data:
+            return None
+
+        try:
+            # Если это JSON строка, парсим её
+            if isinstance(serialized_data, str):
+                return json.loads(serialized_data)
+            else:
+                # Если это уже список или другой объект, возвращаем как есть
+                return serialized_data
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to deserialize parameters: {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"Unexpected error deserializing parameters: {e}")
+            return None
 
     def load_parameters_data(
         self,
@@ -403,6 +484,14 @@ class DataManager:
 
             if file_path.exists():
                 data = pd.read_parquet(file_path)
+
+                # Deserialize parameters if they exist
+                if 'extracted_parameters' in data.columns:
+                    logger.info("Deserializing extracted_parameters column...")
+                    data['extracted_parameters'] = data['extracted_parameters'].apply(
+                        self._deserialize_parameters_from_parquet
+                    )
+
                 logger.info(f"Parameters data loaded from {file_path}")
                 return data
             else:

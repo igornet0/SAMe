@@ -170,7 +170,7 @@ class AdvancedModelManager:
         """Регистрация стандартных конфигураций моделей"""
         # SpaCy модели
         spacy_models = [
-            "ru_core_news_sm", "ru_core_news_md", "ru_core_news_lg"
+            "ru_core_news_lg", "ru_core_news_md", "ru_core_news_lg"
         ]
         
         for model_name in spacy_models:
@@ -369,7 +369,7 @@ class AdvancedModelManager:
 
         except OSError:
             # Пытаемся загрузить fallback модель
-            fallback_models = ["ru_core_news_sm", "ru_core_news_md"]
+            fallback_models = ["ru_core_news_lg", "ru_core_news_md"]
 
             for fallback in fallback_models:
                 if fallback != config.model_path:
