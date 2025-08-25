@@ -2,7 +2,7 @@
 
 ## Требования к системе
 
-- Python 3.9+
+- Python 3.10–3.13
 - Минимум 8 GB RAM
 - 5 GB свободного места на диске
 - Интернет-соединение для загрузки моделей
@@ -199,8 +199,8 @@ format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
 # Через make (рекомендуется)
 make run
 
-# Или через uvicorn напрямую
-uvicorn same.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload
+# Или через uvicorn напрямую (обновлённый путь)
+uvicorn same_api.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload --factory
 ```
 
 ### 2. Инициализация поискового движка

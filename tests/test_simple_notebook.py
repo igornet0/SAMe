@@ -72,7 +72,11 @@ def main():
 
     try:
         # Импортируем экстрактор параметров
-        from same.parameter_extraction.regex_extractor import RegexParameterExtractor
+        try:
+            from same_clear.parameter_extraction.regex_extractor import RegexParameterExtractor
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.parameter_extraction.regex_extractor import RegexParameterExtractor
         
         # Создаем экстрактор
         extractor = RegexParameterExtractor()

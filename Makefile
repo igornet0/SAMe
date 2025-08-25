@@ -36,7 +36,7 @@ install-dev: ## Установить зависимости для разраб�
 # Настройка окружения разработки
 setup-dev: install-dev ## Полная настройка окружения разработки
 	@echo "$(BLUE)Настройка окружения разработки...$(NC)"
-	@if [ ! -f .env ]; then cp .env.example .env; echo "$(YELLOW)Создан файл .env из .env.example$(NC)"; fi
+	@if [ ! -f .env ]; then cp config/.env.example .env; echo "$(YELLOW)Создан файл .env из .env.example$(NC)"; fi
 	@echo "$(GREEN)Окружение разработки настроено!$(NC)"
 	@echo "$(YELLOW)Не забудьте:$(NC)"
 	@echo "  1. Настроить .env файл"
@@ -93,11 +93,11 @@ clean: ## Очистить временные файлы
 # Запуск приложения
 run: ## Запустить приложение локально
 	@echo "$(BLUE)Запуск приложения...$(NC)"
-	$(POETRY) run uvicorn same.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload
+	$(POETRY) run uvicorn same_api.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload
 
 run-prod: ## Запустить приложение в продакшн режиме
 	@echo "$(BLUE)Запуск приложения в продакшн режиме...$(NC)"
-	$(POETRY) run uvicorn same.api.create_app:create_app --host 0.0.0.0 --port 8000 --workers 4
+	$(POETRY) run uvicorn same_api.api.create_app:create_app --host 0.0.0.0 --port 8000 --workers 4
 
 # Docker команды
 docker-build: ## Собрать Docker образ
@@ -110,11 +110,11 @@ docker-run: ## Запустить приложение в Docker
 
 docker-dev: ## Запустить окружение разработки в Docker
 	@echo "$(BLUE)Запуск окружения разработки в Docker...$(NC)"
-	$(DOCKER_COMPOSE) -f docker-compose.dev.yml up -d
+	$(DOCKER_COMPOSE) -f docker/docker-compose.dev.yml up -d
 
 docker-prod: ## Запустить продакшн окружение в Docker
 	@echo "$(BLUE)Запуск продакшн окружения в Docker...$(NC)"
-	$(DOCKER_COMPOSE) -f docker-compose.prod.yml up -d
+	$(DOCKER_COMPOSE) --env-file ./config/.env -f docker/docker-compose.prod.yml up -d
 
 docker-stop: ## Остановить Docker контейнеры
 	@echo "$(BLUE)Остановка Docker контейнеров...$(NC)"
@@ -177,13 +177,13 @@ docs-build: ## Собрать документацию
 	$(POETRY) run mkdocs build
 
 # Демо и примеры
-demo: ## Запустить демо notebook
-	@echo "$(BLUE)Запуск демо notebook...$(NC)"
-	$(POETRY) run jupyter notebook SAMe_Demo.ipynb
+# demo: ## Запустить демо notebook
+# 	@echo "$(BLUE)Запуск демо notebook...$(NC)"
+# 	$(POETRY) run jupyter notebook SAMe_Demo.ipynb
 
-demo-simple: ## Запустить простое демо
-	@echo "$(BLUE)Запуск простого демо...$(NC)"
-	$(POETRY) run jupyter notebook SAMe_Demo_Simple.ipynb
+# demo-simple: ## Запустить простое демо
+# 	@echo "$(BLUE)Запуск простого демо...$(NC)"
+# 	$(POETRY) run jupyter notebook SAMe_Demo_Simple.ipynb
 
 # По умолчанию показываем help
 .DEFAULT_GOAL := help

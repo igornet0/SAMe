@@ -122,7 +122,11 @@ try:
 
     # Пытаемся импортировать реальный websocket_router
     try:
-        from same.api.websocket import websocket_router as real_websocket_router
+        try:
+            from same_api.api.websocket import websocket_router as real_websocket_router
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.api.websocket import websocket_router as real_websocket_router
         websocket_router = real_websocket_router
         WEBSOCKET_AVAILABLE = True
     except ImportError:
@@ -274,7 +278,11 @@ class TestWebSocketManager:
         
         # Импортируем менеджер
         try:
-            from same.api.websocket import ws_manager
+            try:
+                from same_api.api.websocket import ws_manager
+            except ImportError:
+                # Fallback на старый импорт
+                            from same.api.websocket import ws_manager
             
             # Тестируем инициализацию
             await ws_manager.initialize()
@@ -291,7 +299,11 @@ class TestWebSocketManager:
             pytest.skip("WebSocket modules not available")
         
         try:
-            from same.api.websocket import _handle_websocket_message
+            try:
+                from same_api.api.websocket import _handle_websocket_message
+            except ImportError:
+                # Fallback на старый импорт
+                            from same.api.websocket import _handle_websocket_message
             
             # Тестовое сообщение
             test_message = {

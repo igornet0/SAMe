@@ -15,7 +15,11 @@ def test_excel_export_imports():
     
     try:
         # Test the import that was failing in the notebook
-        from same.export.excel_exporter import ExcelExporter, ExcelExportConfig
+        try:
+            from same_api.export.excel_exporter import ExcelExporter, ExcelExportConfig
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.export.excel_exporter import ExcelExporter, ExcelExportConfig
         print("✅ ExcelExporter and ExcelExportConfig imported successfully")
         
         # Test creating an instance with the configuration
@@ -57,7 +61,11 @@ def test_report_generator_imports():
     print("=" * 50)
     
     try:
-        from same.export.report_generator import ReportGenerator, ReportConfig
+        try:
+            from same_api.export.report_generator import ReportGenerator, ReportConfig
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.export.report_generator import ReportGenerator, ReportConfig
         print("✅ ReportGenerator and ReportConfig imported successfully")
         
         # Test creating config
@@ -85,11 +93,19 @@ def test_backward_compatibility():
     print("=" * 50)
     
     try:
-        from same.export.excel_exporter import ExportConfig
+        try:
+            from same_api.export.excel_exporter import ExportConfig
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.export.excel_exporter import ExportConfig
         print("✅ ExportConfig (alias) imported successfully")
         
         # Test that it's the same as ExcelExportConfig
-        from same.export.excel_exporter import ExcelExportConfig
+        try:
+            from same_api.export.excel_exporter import ExcelExportConfig
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.export.excel_exporter import ExcelExportConfig
         
         config1 = ExportConfig()
         config2 = ExcelExportConfig()
@@ -109,8 +125,16 @@ def test_notebook_style_usage():
     
     try:
         # Exact import from notebook
-        from same.export.excel_exporter import ExcelExporter, ExcelExportConfig
-        from same.export.report_generator import ReportGenerator, ReportConfig
+        try:
+            from same_api.export.excel_exporter import ExcelExporter, ExcelExportConfig
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.export.excel_exporter import ExcelExporter, ExcelExportConfig
+        try:
+            from same_api.export.report_generator import ReportGenerator, ReportConfig
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.export.report_generator import ReportGenerator, ReportConfig
         
         # Create config as in notebook
         export_config = ExcelExportConfig(
@@ -184,8 +208,16 @@ def main():
     if all(results):
         print("\n🎉 All tests passed! The Excel export import issue is fixed.")
         print("\n💡 The notebook should now work with:")
-        print("   from same.export.excel_exporter import ExcelExporter, ExcelExportConfig")
-        print("   from same.export.report_generator import ReportGenerator, ReportConfig")
+        try:
+            print("   from same_api.export.excel_exporter import ExcelExporter, ExcelExportConfig")
+        except ImportError:
+            # Fallback на старый импорт
+                    print("   from same.export.excel_exporter import ExcelExporter, ExcelExportConfig")
+        try:
+            print("   from same_api.export.report_generator import ReportGenerator, ReportConfig")
+        except ImportError:
+            # Fallback на старый импорт
+                    print("   from same.export.report_generator import ReportGenerator, ReportConfig")
     else:
         print("\n⚠️  Some tests failed. Please check the errors above.")
     

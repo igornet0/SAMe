@@ -6,12 +6,21 @@ import pytest
 import numpy as np
 from unittest.mock import Mock, patch, MagicMock
 
-from same.search_engine import (
-    FuzzySearchEngine, FuzzySearchConfig,
-    SemanticSearchEngine, SemanticSearchConfig,
-    HybridSearchEngine, HybridSearchConfig,
-    SearchIndexer, IndexConfig
-)
+try:
+    from same_search.search_engine import (
+        FuzzySearchEngine, FuzzySearchConfig,
+        SemanticSearchEngine, SemanticSearchConfig,
+        HybridSearchEngine, HybridSearchConfig,
+        SearchIndexer, IndexConfig
+    )
+except ImportError:
+    # Fallback на старый импорт
+    from same.search_engine import (
+        FuzzySearchEngine, FuzzySearchConfig,
+        SemanticSearchEngine, SemanticSearchConfig,
+        HybridSearchEngine, HybridSearchConfig,
+        SearchIndexer, IndexConfig
+    )
 
 
 class TestFuzzySearchEngine:

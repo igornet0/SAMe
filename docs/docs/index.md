@@ -1,6 +1,6 @@
 # SAMe - Search Analog Model Engine
 
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10--3.13-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
@@ -141,10 +141,9 @@ pytest tests/test_search_engine.py -v
 
 ## 📚 Документация
 
-- [Руководство пользователя](user-guide/introduction.md)
-- [API Reference](api/overview.md)
-- [Установка и настройка](installation/detailed.md)
-- [Примеры использования](examples/notebooks.md)
+- [Руководство пользователя](USER_GUIDE.md)
+- [API Reference](API_REFERENCE.md)
+- [Установка и настройка](INSTALLATION.md)
 
 ## 🤝 Участие в разработке
 

@@ -13,10 +13,25 @@ import time
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from same.search_engine.hybrid_search import HybridSearchEngine, HybridSearchConfig
-from same.search_engine.fuzzy_search import FuzzySearchConfig
-from same.search_engine.semantic_search import SemanticSearchConfig
-from same.categorization import CategoryClassifierConfig
+try:
+    from same_search.search_engine.hybrid_search import HybridSearchEngine, HybridSearchConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.search_engine.hybrid_search import HybridSearchEngine, HybridSearchConfig
+try:
+    from same_search.search_engine.fuzzy_search import FuzzySearchConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.search_engine.fuzzy_search import FuzzySearchConfig
+try:
+    from same_search.search_engine.semantic_search import SemanticSearchConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.search_engine.semantic_search import SemanticSearchConfig
+try:
+    from same_search.categorization.category_classifier import CategoryClassifierConfig
+except ImportError:
+    from same.categorization import CategoryClassifierConfig
 
 
 class TestHybridSearchIntegration:

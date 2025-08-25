@@ -9,12 +9,21 @@ import numpy as np
 from unittest.mock import Mock, patch
 from typing import List, Dict, Any
 
-from src.same.search_engine.semantic_search import SemanticSearchEngine, SemanticSearchConfig
-from src.same.search_engine.hybrid_search import HybridSearchEngine, HybridSearchConfig
-from src.same.analog_search_engine import AnalogSearchEngine, AnalogSearchConfig
-from src.same.text_processing.interfaces import (
-    SearchEngineInterface, AnalogSearchEngineInterface
-)
+try:
+    from same_search.search_engine import SemanticSearchEngine, SemanticSearchConfig
+    from same_search.search_engine import HybridSearchEngine, HybridSearchConfig
+    from same.analog_search_engine import AnalogSearchEngine, AnalogSearchConfig
+    from same_core.interfaces import (
+        SearchEngineInterface, AnalogSearchEngineInterface
+    )
+except ImportError:
+    # Fallback imports
+    from same.search_engine.semantic_search import SemanticSearchEngine, SemanticSearchConfig
+    from same.search_engine.hybrid_search import HybridSearchEngine, HybridSearchConfig
+    from same.analog_search_engine import AnalogSearchEngine, AnalogSearchConfig
+    from same.text_processing.interfaces import (
+        SearchEngineInterface, AnalogSearchEngineInterface
+    )
 
 
 class TestOptimizedSemanticSearch:

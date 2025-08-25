@@ -51,14 +51,17 @@ describe('FileUpload Component', () => {
 
   it('accepts valid file types', async () => {
     const user = userEvent.setup();
-    (fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        status: 'success',
-        message: 'File uploaded successfully',
-        statistics: { total_items: 100 }
+    (fetch as jest.Mock)
+      // upload-catalog
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'queued', task_id: 'task123' })
       })
-    });
+      // upload-status polling
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'success', successful: true, statistics: { dataset: { total_rows: 100, columns: [], per_column: {} }, engine: { catalog_size: 100 } } })
+      });
 
     render(
       <FileUpload
@@ -154,14 +157,15 @@ describe('FileUpload Component', () => {
 
   it('displays uploaded file information', async () => {
     const user = userEvent.setup();
-    (fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        status: 'success',
-        message: 'File uploaded successfully',
-        statistics: { total_items: 150 }
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'queued', task_id: 'task123' })
       })
-    });
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'success', successful: true, statistics: { dataset: { total_rows: 150, columns: [], per_column: {} }, engine: { catalog_size: 150 } } })
+      });
 
     render(
       <FileUpload

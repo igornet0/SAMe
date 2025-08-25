@@ -42,7 +42,11 @@ def test_lemmatizer_with_spacy():
     print("=" * 60)
     
     try:
-        from same.text_processing.lemmatizer import Lemmatizer, LemmatizerConfig
+        try:
+            from same_clear.text_processing.lemmatizer import Lemmatizer, LemmatizerConfig
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.text_processing.lemmatizer import Lemmatizer, LemmatizerConfig
         
         # Create config with the small model
         lemmatizer_config = LemmatizerConfig(
@@ -103,7 +107,11 @@ def test_notebook_cell_simulation():
     
     try:
         # Import exactly as in notebook
-        from same.text_processing.lemmatizer import Lemmatizer, LemmatizerConfig
+        try:
+            from same_clear.text_processing.lemmatizer import Lemmatizer, LemmatizerConfig
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.text_processing.lemmatizer import Lemmatizer, LemmatizerConfig
         
         print("📚 Демонстрация Lemmatizer")
         print("=" * 50)
@@ -173,7 +181,11 @@ def test_configuration_options():
     print("=" * 60)
     
     try:
-        from same.text_processing.lemmatizer import LemmatizerConfig, Lemmatizer
+        try:
+            from same_clear.text_processing.lemmatizer import LemmatizerConfig, Lemmatizer
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.text_processing.lemmatizer import LemmatizerConfig, Lemmatizer
         
         # Test different configurations
         configs = [

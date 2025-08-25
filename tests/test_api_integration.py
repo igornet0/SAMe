@@ -273,7 +273,11 @@ try:
 
     # Пытаемся импортировать реальный create_app
     try:
-        from same.api.create_app import create_app as real_create_app
+        try:
+            from same_api.api.create_app import create_app as real_create_app
+        except ImportError:
+            # Fallback на старый импорт
+                    from same.api.create_app import create_app as real_create_app
         create_app = real_create_app
         API_AVAILABLE = True
     except ImportError:

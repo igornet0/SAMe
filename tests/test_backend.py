@@ -278,7 +278,11 @@ class TestRouterMain:
         try:
             import sys
             # Path configured through poetry/pip install
-            from same.api.router_main import read_root
+            try:
+                from same_api.api.router_main import read_root
+            except ImportError:
+                # Fallback на старый импорт
+                            from same.api.router_main import read_root
 
             # Проверяем что функция существует
             assert callable(read_root)

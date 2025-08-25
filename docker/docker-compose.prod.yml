@@ -3,6 +3,8 @@ version: '3.8'
 services:
   # Основное приложение SAMe
   same-app:
+    env_file:
+      - ../config/.env
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -35,6 +37,8 @@ services:
 
   # База данных PostgreSQL
   same-db:
+    env_file:
+      - ../config/.env
     image: postgres:15-alpine
     container_name: same-db
     restart: unless-stopped
@@ -162,7 +166,7 @@ services:
     container_name: same-grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
     volumes:
@@ -214,6 +218,8 @@ services:
 
   # Backup сервис
   same-backup:
+    env_file:
+      - ../config/.env
     image: postgres:15-alpine
     container_name: same-backup
     restart: "no"

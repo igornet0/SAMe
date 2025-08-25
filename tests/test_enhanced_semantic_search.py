@@ -12,7 +12,11 @@ from unittest.mock import Mock, patch
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from same.search_engine.semantic_search import SemanticSearchEngine, SemanticSearchConfig
+try:
+    from same_search.search_engine.semantic_search import SemanticSearchEngine, SemanticSearchConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.search_engine.semantic_search import SemanticSearchEngine, SemanticSearchConfig
 
 
 class TestEnhancedSemanticSearch:

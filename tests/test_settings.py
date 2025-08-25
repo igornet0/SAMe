@@ -9,12 +9,41 @@ import logging
 from pathlib import Path
 from unittest.mock import Mock, patch, mock_open
 
-from same.settings.config import (
-    AppBaseConfig,
-    RunConfig,
-    LoggingConfig,
-    LOG_DEFAULT_FORMAT
-)
+try:
+    from same_api.settings import (
+        settings, get_settings
+    )
+    # Try to import config components that might exist
+    try:
+        from same_api.settings.config import (
+            AppBaseConfig,
+            RunConfig,
+            LoggingConfig,
+            LOG_DEFAULT_FORMAT
+        )
+    except ImportError:
+        AppBaseConfig = None
+        RunConfig = None
+        LoggingConfig = None
+        LOG_DEFAULT_FORMAT = None
+except ImportError:
+    # Fallback на старый импорт
+    try:
+        from same.settings.config import (
+            AppBaseConfig,
+            RunConfig,
+            LoggingConfig,
+            LOG_DEFAULT_FORMAT
+        )
+        settings = None
+        get_settings = None
+    except ImportError:
+        AppBaseConfig = None
+        RunConfig = None
+        LoggingConfig = None
+        LOG_DEFAULT_FORMAT = None
+        settings = None
+        get_settings = None
 
 
 class TestAppBaseConfig:

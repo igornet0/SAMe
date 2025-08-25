@@ -6,7 +6,11 @@ import asyncio
 import pytest
 from unittest.mock import Mock, patch
 
-from same.models import get_model_manager, AdvancedModelManager
+try:
+    from same_search.models import get_model_manager, AdvancedModelManager
+except ImportError:
+    # Fallback на старый импорт
+    from same.models import get_model_manager, AdvancedModelManager
 
 
 class TestModelManagerIntegration:

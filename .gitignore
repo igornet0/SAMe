@@ -8,6 +8,7 @@ __pycache__/
 prod.env
 *.xlsx
 .DS_Store
+.txt
 
 # Distribution / packaging
 .Python
@@ -200,12 +201,10 @@ cython_debug/
 # SAMe Project Specific
 data/
 !data/.gitkeep
-models/logs/
 temp/
 logs/
 cache/
 pgadmin/
-models/
 
 # Model files (large binary files)
 *.faiss
@@ -216,4 +215,4 @@ src/models/
 
 # Alembic versions (except template)
 alembic/versions/*.py
-!alembic/versions/.gitkeep
+!alembic/versions/.gitkeepnotebooks/demo/catalog_with_clusters.csv

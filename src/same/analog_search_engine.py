@@ -10,18 +10,22 @@ from pathlib import Path
 import asyncio
 import time
 
-# Импорты модулей системы
-from .text_processing import TextPreprocessor, PreprocessorConfig
-from .text_processing.interfaces import (
-    AnalogSearchEngineInterface, TextPreprocessorInterface,
-    SearchEngineInterface, FuzzySearchInterface,
-    SemanticSearchInterface, HybridSearchInterface
+# Импорты модулей системы - обновлено для новой архитектуры
+from same_clear.text_processing import TextPreprocessor, PreprocessorConfig
+from same_core.interfaces import (
+    AnalogSearchEngineInterface, TextProcessorInterface as TextPreprocessorInterface,
+    SearchEngineInterface
 )
-from .search_engine import FuzzySearchEngine, SemanticSearchEngine, HybridSearchEngine
-from .parameter_extraction import RegexParameterExtractor, ParameterParser, ParameterParserConfig
-from .parameter_extraction.parameter_utils import ParameterFormatter, ParameterAnalyzer, ParameterDataFrameUtils
-from .export import ExcelExporter, ExportConfig
-from .data_manager.DataManager import DataManager
+# Дополнительные интерфейсы для обратной совместимости
+FuzzySearchInterface = SearchEngineInterface
+SemanticSearchInterface = SearchEngineInterface
+HybridSearchInterface = SearchEngineInterface
+
+from same_search.search_engine import FuzzySearchEngine, SemanticSearchEngine, HybridSearchEngine
+from same_clear.parameter_extraction import RegexParameterExtractor, ParameterParser, ParameterParserConfig
+from same_clear.parameter_extraction.parameter_utils import ParameterFormatter, ParameterAnalyzer, ParameterDataFrameUtils
+from same_api.export import ExcelExporter, ExportConfig
+from src.data_manager.DataManager import DataManager
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +71,7 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
         # Инициализация парсера параметров
         parameter_config = ParameterParserConfig(
             use_regex=self.config.enable_parameter_extraction,
-            use_ml=False,  # ML пока отключен
+            use_ml=False,  
             min_confidence=0.5,
             remove_duplicates=True
         )
@@ -88,6 +92,11 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
         self.catalog_data = None
         self.processed_catalog = None
         self.is_ready = False
+        # Report about preprocessing issues
+        self.processing_report: Dict[str, Any] = {
+            'failed_count': 0,
+            'failed_rows': []  # list of {code, name, error}
+        }
         
         logger.info("AnalogSearchEngine initialized")
 
@@ -138,8 +147,9 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
         """
         try:
             # Загрузка данных
+            # Поддержка путей к файлам/списков/готового DataFrame
             self.catalog_data = await self._load_catalog_data(catalog_data)
-            logger.info(f"Loaded catalog with {len(self.catalog_data)} items")
+            # logger.info(f"Loaded catalog with {len(self.catalog_data)} items")
             
             # Предобработка данных
             await self._preprocess_catalog()
@@ -170,7 +180,6 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
                 return pd.read_csv(file_path)
             else:
                 raise ValueError(f"Unsupported file format: {file_path.suffix}")
-        
         else:
             raise ValueError("Invalid data source type")
     
@@ -223,29 +232,92 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
         if output_columns:
             default_columns.update(output_columns)
 
-        # Получаем тексты для обработки
-        texts = df[text_column].fillna('').astype(str).tolist()
+        # Получаем тексты для обработки (всегда списком в порядке строк, чтобы не терять дубликаты ключей)
+        code_series = df['Код'] if 'Код' in df.columns else df.index
+        name_series = df[text_column].fillna('').astype(str)
+        texts: List[str] = name_series.tolist()
 
         # Обрабатываем тексты асинхронно
+        self.preprocessor: TextPreprocessor
         results = await self.preprocessor.preprocess_batch_async(texts)
 
-        # Проверяем соответствие длин
+        # Проверяем соответствие длин и исправляем если нужно
         if len(results) != len(texts):
-            logger.error(f"Results length ({len(results)}) doesn't match texts length ({len(texts)})")
-            raise ValueError(f"Processing failed: expected {len(texts)} results, got {len(results)}")
+            logger.warning(f"Results length ({len(results)}) doesn't match texts length ({len(texts)}). Attempting to fix...")
+            
+            # Если результатов меньше, добавляем недостающие
+            if len(results) < len(texts):
+                missing_count = len(texts) - len(results)
+                logger.warning(f"Adding {missing_count} missing results")
+                for i in range(missing_count):
+                    results.append({
+                        'original': '',
+                        'final_text': '',
+                        'processing_successful': False,
+                        'error': 'Missing result from processing'
+                    })
+            
+            # Если результатов больше, обрезаем лишние
+            elif len(results) > len(texts):
+                excess_count = len(results) - len(texts)
+                logger.warning(f"Truncating {excess_count} excess results")
+                results = results[:len(texts)]
 
         # Добавляем результаты в DataFrame
         df_result = df.copy()
 
         if self.preprocessor.config.save_intermediate_steps:
-            df_result[default_columns['cleaned']] = [r['cleaning']['normalized'] for r in results]
-            df_result[default_columns['normalized']] = [r['normalization']['final_normalized'] for r in results]
-            df_result[default_columns['lemmatized']] = [r['lemmatization']['lemmatized'] for r in results]
+            df_result[default_columns['cleaned']] = [r.get('cleaning', {}).get('normalized', '') for r in results]
+            df_result[default_columns['normalized']] = [r.get('normalization', {}).get('final_normalized', '') for r in results]
+            df_result[default_columns['lemmatized']] = [r.get('lemmatization', {}).get('lemmatized', '') for r in results]
 
-        df_result[default_columns['final']] = [r['final_text'] for r in results]
+        df_result[default_columns['final']] = [r.get('final_text', '') for r in results]
 
         # Добавляем статистику
-        df_result[f'{text_column}_processing_success'] = [r['processing_successful'] for r in results]
+        success_list = [r.get('processing_successful', False) for r in results]
+        # Выравниваем длину при рассинхронизации
+        if len(success_list) != len(df_result):
+            logger.warning(
+                f"Processing success length mismatch: got {len(success_list)}, expected {len(df_result)}. "
+                "Auto-correcting by padding/truncating and marking errors."
+            )
+            if len(success_list) < len(df_result):
+                pad = len(df_result) - len(success_list)
+                success_list = success_list + [False] * pad
+                # Обновляем отчет
+                for i in range(min(pad, 1000)):
+                    idx = len(success_list) - pad + i
+                    code_series = df['Код'] if 'Код' in df.columns else df.index
+                    try:
+                        code_val = code_series.iloc[idx]
+                        name_val = name_series.iloc[idx]
+                    except Exception:
+                        code_val, name_val = '', ''
+                    self.processing_report['failed_rows'].append({
+                        'code': code_val,
+                        'name': name_val,
+                        'error': 'Processing success missing result'
+                    })
+                self.processing_report['failed_count'] = int(self.processing_report.get('failed_count', 0)) + pad
+            else:
+                success_list = success_list[:len(df_result)]
+        df_result[f'{text_column}_processing_success'] = success_list
+
+        # Обновляем отчёт о сбоях обработки
+        failed_rows = []
+        # Ограничим размер сохраняемого списка, чтобы не раздувать ответ
+        MAX_FAILED_ROWS = 1000
+        for i, ok in enumerate(success_list):
+            if not ok and len(failed_rows) < MAX_FAILED_ROWS:
+                failed_rows.append({
+                    'code': code_series.iloc[i].item() if hasattr(code_series.iloc[i], 'item') else code_series.iloc[i],
+                    'name': name_series.iloc[i],
+                    'error': results[i].get('error')
+                })
+        self.processing_report = {
+            'failed_count': int(len([x for x in success_list if not x])),
+            'failed_rows': failed_rows
+        }
 
         return df_result
 
@@ -272,20 +344,83 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
         name_column = self._find_name_column(self.catalog_data)
         names = self.catalog_data[name_column].fillna('').astype(str).tolist()
 
-        # Пакетное извлечение параметров с использованием улучшенного парсера
-        extracted_params = self.parameter_parser.parse_batch(names)
+        # Пакетное извлечение параметров с защитой от рассинхронизации длин
+        try:
+            extracted_params = self.parameter_parser.parse_batch(names) or []
+        except Exception as e:
+            logger.error(f"Parameter extraction failed: {e}")
+            extracted_params = []
 
-        # Добавляем параметры в DataFrame
-        self.processed_catalog['extracted_parameters'] = extracted_params
+        expected_len = len(self.processed_catalog)
+        actual_len = len(extracted_params)
+
+        parameters_processing_success = []
+
+        if actual_len < expected_len:
+            # Дополняем недостающие элементы пустыми значениями и помечаем как ошибку
+            missing = expected_len - actual_len
+            logger.warning(
+                f"Parameter extraction length mismatch: got {actual_len}, expected {expected_len}. Padding {missing} items"
+            )
+            extracted_params = list(extracted_params) + [{} for _ in range(missing)]
+            parameters_processing_success = [True] * actual_len + [False] * missing
+            # Обновляем отчёт о сбоях
+            for i in range(min(missing, 1000)):
+                try:
+                    code_val = self.processed_catalog.index[actual_len + i]
+                    name_val = names[actual_len + i] if (actual_len + i) < len(names) else ''
+                except Exception:
+                    code_val, name_val = '', ''
+                self.processing_report['failed_rows'].append({
+                    'code': code_val,
+                    'name': name_val,
+                    'error': 'Parameter extraction missing result'
+                })
+            self.processing_report['failed_count'] = int(self.processing_report.get('failed_count', 0)) + missing
+        elif actual_len > expected_len:
+            # Обрезаем лишние и считаем их как избыточные
+            extra = actual_len - expected_len
+            logger.warning(
+                f"Parameter extraction length mismatch: got {actual_len}, expected {expected_len}. Truncating extra {extra} items"
+            )
+            extracted_params = extracted_params[:expected_len]
+            parameters_processing_success = [True] * expected_len
+        else:
+            parameters_processing_success = [True] * expected_len
+
+        # Безопасно добавляем результаты в DataFrame
+        try:
+            self.processed_catalog['extracted_parameters'] = extracted_params
+            self.processed_catalog['parameters_processing_success'] = parameters_processing_success
+        except Exception as assign_error:
+            logger.error(f"Failed to assign extracted parameters to DataFrame: {assign_error}")
+            # В крайнем случае заполняем полностью пустыми значениями
+            self.processed_catalog['extracted_parameters'] = [{} for _ in range(expected_len)]
+            self.processed_catalog['parameters_processing_success'] = [False] * expected_len
+            self.processing_report['failed_count'] = int(self.processing_report.get('failed_count', 0)) + expected_len
+            for i in range(min(expected_len, 1000)):
+                self.processing_report['failed_rows'].append({
+                    'code': self.processed_catalog.index[i],
+                    'name': names[i] if i < len(names) else '',
+                    'error': 'Failed to assign parameters to DataFrame'
+                })
 
         # Добавляем дополнительные колонки с параметрами
-        self.processed_catalog = ParameterDataFrameUtils.add_parameters_columns(
-            self.processed_catalog, 'extracted_parameters'
-        )
+        try:
+            self.processed_catalog = ParameterDataFrameUtils.add_parameters_columns(
+                self.processed_catalog, 'extracted_parameters'
+            )
+        except Exception as add_cols_error:
+            logger.warning(f"Failed to add parameter columns: {add_cols_error}")
 
-        # Анализ и логирование статистики
-        stats = ParameterAnalyzer.analyze_parameters_batch(extracted_params)
-        logger.info(f"Parameter extraction completed. Stats: {stats['items_with_parameters']}/{stats['total_items']} items with parameters")
+        # Анализ и логирование статистики (устойчиво к ошибкам)
+        try:
+            stats = ParameterAnalyzer.analyze_parameters_batch(self.processed_catalog['extracted_parameters'])
+            logger.info(
+                f"Parameter extraction completed. Stats: {stats['items_with_parameters']}/{stats['total_items']} items with parameters"
+            )
+        except Exception as stats_error:
+            logger.warning(f"Failed to analyze parameter extraction stats: {stats_error}")
 
         # Сохраняем данные с параметрами
         if hasattr(self, 'data_manager'):
@@ -303,15 +438,16 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
         logger.info("Initializing search engines...")
         
         # Подготовка данных для индексации
-        documents = self.processed_catalog['processed_name'].fillna('').astype(str).tolist()
+        name_col = 'processed_name' if 'processed_name' in self.processed_catalog.columns else self._find_name_column(self.processed_catalog)
+        documents = self.processed_catalog[name_col].fillna('').astype(str).tolist()
         document_ids = self.processed_catalog.index.tolist()
 
         # Подготовка метаданных с категориями
         metadata = []
         for idx, row in self.processed_catalog.iterrows():
             meta = {
-                'original_name': row.get('original_name', ''),
-                'processed_name': row.get('processed_name', ''),
+                'original_name': row.get('original_name', row.get(name_col, '')),
+                'processed_name': row.get('processed_name', row.get(name_col, '')),
                 'category': 'unknown'  # Будет определена автоматически
             }
             # Добавляем параметры если есть
@@ -337,7 +473,6 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
 
         if self.config.search_method == 'hybrid':
             try:
-                from .search_engine.hybrid_search import HybridSearchEngine
                 self.hybrid_engine = HybridSearchEngine()
                 self.hybrid_engine.fit(documents, document_ids, metadata)
                 logger.info("Hybrid search engine initialized")
@@ -659,7 +794,8 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
             'is_ready': self.is_ready,
             'catalog_size': len(self.catalog_data) if self.catalog_data is not None else 0,
             'search_method': self.config.search_method,
-            'similarity_threshold': self.config.similarity_threshold
+            'similarity_threshold': self.config.similarity_threshold,
+            'processing_failures': self.processing_report.get('failed_count', 0)
         }
         
         if self.fuzzy_engine:
@@ -669,6 +805,10 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
             stats['semantic_engine'] = self.semantic_engine.get_statistics()
         
         return stats
+
+    def get_processing_report(self) -> Dict[str, Any]:
+        """Отчёт о неуспешно обработанных строках (ограниченный список)."""
+        return self.processing_report
     
     async def save_models(self, models_dir: str = None):
         """Сохранение обученных моделей"""
@@ -727,23 +867,38 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
 
             # Выбор поискового движка
             if search_type == "fuzzy" and self.fuzzy_engine:
-                if hasattr(self.fuzzy_engine, 'is_fitted') and self.fuzzy_engine.is_fitted():
+                if hasattr(self.fuzzy_engine, 'is_fitted'):
+                    is_fitted = self.fuzzy_engine.is_fitted() if callable(self.fuzzy_engine.is_fitted) else self.fuzzy_engine.is_fitted
+                    if is_fitted:
+                        results = self.fuzzy_engine.search(final_query, top_k, **kwargs)
+                    else:
+                        logger.warning("Fuzzy engine not fitted, falling back to semantic")
+                        results = self._fallback_search(final_query, top_k, **kwargs)
+                else:
+                    logger.warning("Fuzzy engine has no is_fitted attribute, trying search anyway")
                     results = self.fuzzy_engine.search(final_query, top_k, **kwargs)
-                else:
-                    logger.warning("Fuzzy engine not fitted, falling back to semantic")
-                    results = self._fallback_search(final_query, top_k, **kwargs)
             elif search_type == "semantic" and self.semantic_engine:
-                if hasattr(self.semantic_engine, 'is_fitted') and self.semantic_engine.is_fitted:
+                if hasattr(self.semantic_engine, 'is_fitted'):
+                    is_fitted = self.semantic_engine.is_fitted() if callable(self.semantic_engine.is_fitted) else self.semantic_engine.is_fitted
+                    if is_fitted:
+                        results = self.semantic_engine.search(final_query, top_k, **kwargs)
+                    else:
+                        logger.warning("Semantic engine not fitted, falling back to fuzzy")
+                        results = self._fallback_search(final_query, top_k, **kwargs)
+                else:
+                    logger.warning("Semantic engine has no is_fitted attribute, trying search anyway")
                     results = self.semantic_engine.search(final_query, top_k, **kwargs)
-                else:
-                    logger.warning("Semantic engine not fitted, falling back to fuzzy")
-                    results = self._fallback_search(final_query, top_k, **kwargs)
             elif search_type == "hybrid" and self.hybrid_engine:
-                if hasattr(self.hybrid_engine, 'is_fitted') and self.hybrid_engine.is_fitted():
-                    results = self.hybrid_engine.search(final_query, top_k, **kwargs)
+                if hasattr(self.hybrid_engine, 'is_fitted'):
+                    is_fitted = self.hybrid_engine.is_fitted() if callable(self.hybrid_engine.is_fitted) else self.hybrid_engine.is_fitted
+                    if is_fitted:
+                        results = self.hybrid_engine.search(final_query, top_k, **kwargs)
+                    else:
+                        logger.warning("Hybrid engine not fitted, using fallback")
+                        results = self._fallback_search(final_query, top_k, **kwargs)
                 else:
-                    logger.warning("Hybrid engine not fitted, using fallback")
-                    results = self._fallback_search(final_query, top_k, **kwargs)
+                    logger.warning("Hybrid engine has no is_fitted attribute, trying search anyway")
+                    results = self.hybrid_engine.search(final_query, top_k, **kwargs)
             else:
                 # Fallback к доступному движку
                 results = self._fallback_search(final_query, top_k, **kwargs)
@@ -776,12 +931,20 @@ class AnalogSearchEngine(AnalogSearchEngineInterface):
         for engine_type, engine in engines_to_try:
             if engine and hasattr(engine, 'is_fitted'):
                 try:
-                    if (hasattr(engine, 'is_fitted') and
-                        (callable(engine.is_fitted) and engine.is_fitted() or
-                         not callable(engine.is_fitted) and engine.is_fitted)):
+                    is_fitted = engine.is_fitted() if callable(engine.is_fitted) else engine.is_fitted
+                    if is_fitted:
                         results = engine.search(query, top_k, **kwargs)
                         logger.info(f"Fallback to {engine_type} engine successful")
                         return results
+                except Exception as e:
+                    logger.warning(f"Fallback {engine_type} engine failed: {e}")
+                    continue
+            elif engine:
+                # Если движок есть, но нет атрибута is_fitted, пробуем поиск
+                try:
+                    results = engine.search(query, top_k, **kwargs)
+                    logger.info(f"Fallback to {engine_type} engine successful (no is_fitted check)")
+                    return results
                 except Exception as e:
                     logger.warning(f"Fallback {engine_type} engine failed: {e}")
                     continue

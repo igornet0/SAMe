@@ -51,7 +51,7 @@ const Alert: React.FC<AlertProps> = ({
   const Icon = config.icon;
   
   return (
-    <div className={`rounded-md border p-4 ${config.bgColor} ${config.borderColor} ${className}`}>
+    <div className={`rounded-md border p-4 ${config.bgColor} ${config.borderColor} ${className}`} role="alert" aria-live="assertive" aria-atomic="true">
       <div className="flex">
         <div className="flex-shrink-0">
           <Icon className={`h-5 w-5 ${config.iconColor}`} />

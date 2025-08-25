@@ -5,9 +5,10 @@ import SearchInterface from './components/SearchInterface';
 import ResultsDisplay from './components/ResultsDisplay';
 import ErrorBoundary from './components/ErrorBoundary';
 import { Alert, LoadingSpinner, ToastProvider, useToast } from './components/ui';
-import { FileUploadInfo, UploadResponse, SearchResult, AppState } from './types/api';
+import { useI18n, LanguageSwitcher } from './i18n';
+import { FileUploadInfo, UploadResponse, SearchResult, AppState, DatasetStatistics } from './types/api';
+import DatasetStats from './components/DatasetStats';
 import { downloadExcelFile } from './utils/exportUtils';
-import apiClient from './services/apiClient';
 
 const AppContent: React.FC = () => {
   const [appState, setAppState] = useState<AppState>({
@@ -22,16 +23,27 @@ const AppContent: React.FC = () => {
 
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   const { showSuccess, showError, showWarning, showInfo } = useToast();
+  const { t } = useI18n();
 
   const checkBackendConnection = useCallback(async () => {
     try {
-      await apiClient.healthCheck();
+      // Try lightweight healthz first, then fallback to /search/
+      let res = await fetch('/healthz');
+      if (!res.ok) {
+        res = await fetch('/search/health');
+      }
+      if (!res.ok) {
+        res = await fetch('/search/');
+      }
+      if (!res.ok) throw new Error('Health check failed');
       setConnectionStatus('connected');
-      showInfo('Connected to SAMe backend successfully');
+      if (!(typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test')) {
+        showInfo(t('app.connectedToast.message'), t('app.connectedToast.title'));
+      }
     } catch (error) {
       console.error('Backend connection failed:', error);
       setConnectionStatus('error');
-      showError('Failed to connect to SAMe backend. Please ensure the server is running.');
+      showError(t('app.connectError.message'), t('app.connectError.title'));
     }
   }, [showError, showInfo]);
 
@@ -45,12 +57,23 @@ const AppContent: React.FC = () => {
       ...prev,
       catalogUploaded: true,
       uploadedFile: fileInfo,
-      error: null
+      error: null,
+      uploadStatistics: response.statistics
     }));
-    showSuccess(
-      `Catalog uploaded successfully! ${fileInfo.recordCount ? `${fileInfo.recordCount} records loaded.` : ''}`,
-      'Upload Complete'
-    );
+    const countText = fileInfo.recordCount ? t('upload.successToast.count', { count: fileInfo.recordCount }) : '';
+    const hasErrors = (response.statistics as any)?.processing_report?.failed_count > 0
+      || (response.status === 'success_with_errors');
+    if (hasErrors) {
+      showWarning(
+        t('upload.partialSuccessToast.message', { count: countText }),
+        t('upload.partialSuccessToast.title')
+      );
+    } else {
+      showSuccess(
+        t('upload.successToast.message', { count: countText }),
+        t('upload.successToast.title')
+      );
+    }
   };
 
   const handleUploadError = (error: string) => {
@@ -60,7 +83,7 @@ const AppContent: React.FC = () => {
       uploadedFile: null,
       error
     }));
-    showError(error, 'Upload Failed');
+    showError(error, t('upload.errorToast.title'));
   };
 
   const handleSearchResults = (results: SearchResult[], query: string) => {
@@ -72,9 +95,10 @@ const AppContent: React.FC = () => {
     }));
 
     if (results.length === 0) {
-      showWarning(`No analogs found for "${query}". Try adjusting your search terms.`, 'No Results');
+      showWarning(t('search.noResults.text', { query }), t('search.noResults.title'));
     } else {
-      showSuccess(`Found ${results.length} analog${results.length !== 1 ? 's' : ''} for "${query}"`, 'Search Complete');
+      const plural = results.length !== 1 ? 's' : '';
+      showSuccess(t('search.results.count', { count: results.length, plural }), t('search.title'));
     }
   };
 
@@ -97,7 +121,7 @@ const AppContent: React.FC = () => {
         appState.currentQuery,
         `analog_search_${appState.currentQuery.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
       );
-      showSuccess('Excel file downloaded successfully!', 'Export Complete');
+      showSuccess('Excel file downloaded successfully!', t('search.results.export'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Export failed';
       setAppState(prev => ({ ...prev, error: errorMessage }));
@@ -114,7 +138,7 @@ const AppContent: React.FC = () => {
   if (connectionStatus === 'checking') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <LoadingSpinner size="lg" text="Connecting to SAMe backend..." />
+        <LoadingSpinner size="lg" text={t('app.connecting')} />
       </div>
     );
   }
@@ -125,15 +149,15 @@ const AppContent: React.FC = () => {
         <div className="max-w-md w-full">
           <Alert
             type="error"
-            title="Backend Connection Failed"
-            message="Unable to connect to the SAMe backend server. Please ensure the server is running on http://localhost:8000"
+            title={t('app.connectError.title')}
+            message={t('app.connectError.message')}
           />
           <div className="mt-4 text-center">
             <button
               onClick={checkBackendConnection}
               className="text-blue-600 hover:text-blue-800 font-medium"
             >
-              Try Again
+              {t('common.tryAgain')}
             </button>
           </div>
         </div>
@@ -149,15 +173,16 @@ const AppContent: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                SAMe - Analog Search Engine
+                {t('app.title')}
               </h1>
               <p className="text-sm text-gray-600 mt-1">
-                Search for material and technical resource analogs
+                {t('app.subtitle')}
               </p>
             </div>
-            <div className="flex items-center space-x-2" role="status" aria-live="polite">
+            <div className="flex items-center space-x-4" role="status" aria-live="polite">
               <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" aria-hidden="true" />
-              <span className="text-sm text-gray-600">Connected</span>
+              <span className="text-sm text-gray-600">{t('common.connected')}</span>
+              <LanguageSwitcher />
             </div>
           </div>
         </div>
@@ -196,6 +221,16 @@ const AppContent: React.FC = () => {
             />
           </section>
 
+          {/* Dataset Statistics Section */}
+          {appState.uploadStatistics && (
+            <section className="bg-white rounded-lg shadow-sm p-4 sm:p-6" aria-labelledby="dataset-stats-section">
+              <DatasetStats 
+                dataset={(appState.uploadStatistics as any)?.dataset as DatasetStatistics}
+                processingReport={(appState.uploadStatistics as any)?.processing_report as any}
+              />
+            </section>
+          )}
+
           {/* Results Section */}
           {appState.searchResults.length > 0 && (
             <section className="bg-white rounded-lg shadow-sm p-4 sm:p-6" aria-labelledby="results-section">
@@ -214,7 +249,7 @@ const AppContent: React.FC = () => {
       <footer className="bg-white border-t border-gray-200 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <p className="text-center text-sm text-gray-500">
-            SAMe v1.2.0 - Search Analog Model Engine
+            {t('app.footer')}
           </p>
         </div>
       </footer>

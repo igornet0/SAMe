@@ -74,30 +74,13 @@ markdown_extensions:
 
 nav:
   - Главная: index.md
-  - Установка: 
-    - Быстрый старт: installation/quick-start.md
-    - Подробная установка: installation/detailed.md
-    - Docker: installation/docker.md
-  - Руководство пользователя:
-    - Введение: user-guide/introduction.md
-    - API: user-guide/api.md
-    - Поиск аналогов: user-guide/search.md
-    - Экспорт результатов: user-guide/export.md
+  - Установка: INSTALLATION.md
+  - Руководство пользователя: USER_GUIDE.md
   - Руководство разработчика:
     - Архитектура: dev-guide/architecture.md
-    - Настройка окружения: dev-guide/setup.md
-    - Тестирование: dev-guide/testing.md
-    - Вклад в проект: dev-guide/contributing.md
-  - API Reference:
-    - Обзор: api/overview.md
-    - Поиск: api/search.md
-    - Обработка текста: api/text-processing.md
-    - Извлечение параметров: api/parameter-extraction.md
-    - Экспорт: api/export.md
-  - Примеры:
-    - Jupyter Notebooks: examples/notebooks.md
-    - Использование API: examples/api-usage.md
-    - Интеграция: examples/integration.md
+    - Миграция: MIGRATION_GUIDE.md
+    - Notebook Guide: NOTEBOOK_GUIDE.md
+  - API Reference: API_REFERENCE.md
 
 extra:
   social:
@@ -107,4 +90,4 @@ extra:
     provider: mike
 
 extra_css:
-  - stylesheets/extra.css
+  - ../stylesheets/extra.css

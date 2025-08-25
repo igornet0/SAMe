@@ -13,7 +13,11 @@ from datetime import datetime
 import tempfile
 import os
 
-from same.data_manager.DataManager import DataManager, SettingsTrade
+try:
+    from same_api.data_manager.DataManager import DataManager, SettingsTrade
+except ImportError:
+    # Fallback на старый импорт
+    from same.data_manager.DataManager import DataManager, SettingsTrade
 
 
 class TestSettingsTrade:

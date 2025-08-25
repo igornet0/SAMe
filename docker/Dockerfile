@@ -1,5 +1,5 @@
 # Multi-stage build для оптимизации размера образа
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 # Установка системных зависимостей для сборки
 RUN apt-get update && apt-get install -y \
@@ -26,7 +26,7 @@ RUN poetry config virtualenvs.create true && \
     poetry install --only=main --no-root
 
 # Production stage
-FROM python:3.11-slim AS production
+FROM python:3.12-slim AS production
 
 # Создание пользователя для безопасности
 RUN groupadd -r same && useradd -r -g same same
@@ -40,6 +40,9 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Установка spaCy-модели для русского языка (используем меньшую модель для стабильности)
+RUN python -m spacy download ru_core_news_sm || echo "Failed to download ru_core_news_sm, continuing..."
+
 # Установка рабочей директории
 WORKDIR /app
 
@@ -48,10 +51,10 @@ COPY src/ ./src/
 COPY config/ ./config/
 COPY scripts/ ./scripts/
 COPY alembic.ini ./
-COPY config/.env.example ./.env
+COPY config/.env ./.env
 
 # Загрузка моделей ML
-RUN python scripts/download_models.py
+# RUN python scripts/download_models.py
 
 # Создание необходимых директорий с правильными правами
 RUN mkdir -p data logs temp models cache && \
@@ -80,4 +83,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 EXPOSE 8000
 
 # Команда по умолчанию
-CMD ["uvicorn", "same.api.create_app:create_app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "same_api.api.create_app:create_app", "--host", "0.0.0.0", "--port", "8000", "--factory"]

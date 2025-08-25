@@ -5,6 +5,7 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  models_data:
 
 services:
   # База данных PostgreSQL
@@ -45,6 +46,24 @@ services:
       timeout: 10s
       retries: 3
 
+  # RabbitMQ брокер для фоновых задач
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: same-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - same-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Основное приложение SAMe
   app:
     build:
@@ -54,6 +73,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://same_user:same_password@db:5432/same_db
       - REDIS_URL=redis://redis:6379/0
+      - RUN__CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - RUN__CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ENVIRONMENT=production
       - DEBUG=false
     ports:
@@ -61,15 +82,40 @@ services:
     volumes:
       - ../data:/app/data
       - ../logs:/app/logs
-      - ../src:/app/src  # Монтируем исходный код для быстрой разработки
+      - models_data:/app/models
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - same-network
     restart: unless-stopped
+
+  # Celery worker for background tasks
+  celery-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: same-celery-worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - RUN__CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - RUN__CELERY_RESULT_BACKEND=redis://redis:6379/0
+    networks:
+      - same-network
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - models_data:/app/models
+    command: >
+      sh -c "celery -A same_api.api.configuration.tasks.celery_app.celery_app worker -l info"
 
   # Frontend React приложение
   frontend:

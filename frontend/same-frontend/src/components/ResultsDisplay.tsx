@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { Button, Table } from './ui';
 import { SearchResult } from '../types/api';
+import { useI18n } from '../i18n';
 
 interface ResultsDisplayProps {
   results: SearchResult[];
@@ -16,6 +17,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   onExport,
   exporting = false
 }) => {
+  const { t } = useI18n();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
@@ -34,10 +36,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   // Determine search method used
   const getSearchMethod = (result: SearchResult): string => {
     if (result.search_method) return result.search_method;
-    if (result.similarity_score) return 'Semantic';
-    if (result.combined_score) return 'Hybrid';
-    if (result.fuzzy_score) return 'Fuzzy';
-    return 'Unknown';
+    if (result.similarity_score) return t('search.method.badge.semantic');
+    if (result.combined_score) return t('search.method.badge.hybrid');
+    if (result.fuzzy_score) return t('search.method.badge.fuzzy');
+    return t('search.method.badge.unknown');
   };
 
   // Get additional metrics for tooltip/details (currently unused but kept for future use)
@@ -61,7 +63,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const columns = [
     {
       key: 'rank',
-      header: 'Rank',
+      header: t('results.rank'),
       render: (value: any, row: SearchResult) => (
         <span className="font-medium text-gray-900 text-sm sm:text-base">
           #{row.rank || (startIndex + currentResults.indexOf(row) + 1)}
@@ -71,7 +73,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     },
     {
       key: 'document',
-      header: 'Found Analog',
+      header: t('results.foundAnalog'),
       render: (value: string) => (
         <div className="min-w-0 flex-1">
           <p className="text-xs sm:text-sm font-medium text-gray-900 break-words" title={value}>
@@ -82,7 +84,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     },
     {
       key: 'similarity_score',
-      header: 'Similarity',
+      header: t('results.similarity'),
       render: (value: any, row: SearchResult) => {
         const score = row.similarity_score || row.combined_score || 0;
         const percentage = score * 100;
@@ -107,7 +109,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                 aria-valuenow={percentage}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-label={`Similarity score: ${percentage.toFixed(1)}%`}
+                aria-label={`${t('results.similarity')}: ${percentage.toFixed(1)}%`}
               />
             </div>
           </div>
@@ -117,7 +119,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     },
     {
       key: 'search_method',
-      header: 'Method',
+      header: t('results.method'),
       render: (value: any, row: SearchResult) => (
         <span className="inline-flex items-center px-1.5 py-0.5 sm:px-2.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
           <span className="hidden sm:inline">{getSearchMethod(row)}</span>
@@ -128,7 +130,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     },
     {
       key: 'document_id',
-      header: 'ID',
+      header: t('results.id'),
       render: (value: string | number) => (
         <span className="text-xs sm:text-sm text-gray-500 font-mono break-all">
           {value}
@@ -150,22 +152,20 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
             disabled={currentPage === 1}
           >
-            Previous
+            {t('common.previous')}
           </Button>
           <Button
             variant="outline"
             onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
             disabled={currentPage === totalPages}
           >
-            Next
+            {t('common.next')}
           </Button>
         </div>
         <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
           <div>
             <p className="text-sm text-gray-700">
-              Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
-              <span className="font-medium">{Math.min(endIndex, results.length)}</span> of{' '}
-              <span className="font-medium">{results.length}</span> results
+              {t('results.showing', { from: startIndex + 1, to: Math.min(endIndex, results.length), total: results.length })}
             </p>
           </div>
           <div>
@@ -225,9 +225,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     return (
       <div className="text-center py-12">
         <Search className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">{t('search.noResults.title')}</h3>
         <p className="text-gray-500">
-          No analogs were found for "{query}". Try adjusting your search terms or using a different search method.
+          {t('search.noResults.text', { query })}
         </p>
       </div>
     );
@@ -238,10 +238,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
-            Search Results for "{query}"
+            {t('search.results.title', { query })}
           </h2>
           <p className="text-sm text-gray-600">
-            Found {results.length} analog{results.length !== 1 ? 's' : ''}
+            {t('search.results.count', { count: results.length, plural: results.length !== 1 ? 's' : '' })}
           </p>
         </div>
         
@@ -252,7 +252,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
             loading={exporting}
             disabled={exporting}
           >
-            Export to Excel
+            {t('search.results.export')}
           </Button>
         )}
       </div>
@@ -261,7 +261,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
         <Table
           columns={columns}
           data={currentResults}
-          emptyMessage="No results to display"
+          emptyMessage={t('search.table.empty')}
         />
         <PaginationControls />
       </div>

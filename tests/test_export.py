@@ -10,8 +10,16 @@ from pathlib import Path
 from unittest.mock import Mock, patch, mock_open
 from datetime import datetime
 
-from same.export.excel_exporter import ExcelExporter, ExcelExportConfig, ExportConfig
-from same.export.report_generator import ReportGenerator, ReportConfig
+try:
+    from same_api.export.excel_exporter import ExcelExporter, ExcelExportConfig, ExportConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.export.excel_exporter import ExcelExporter, ExcelExportConfig, ExportConfig
+try:
+    from same_api.export.report_generator import ReportGenerator, ReportConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.export.report_generator import ReportGenerator, ReportConfig
 
 
 class TestExcelExportConfig:

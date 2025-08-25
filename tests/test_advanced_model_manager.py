@@ -7,11 +7,33 @@ import asyncio
 import time
 from unittest.mock import Mock, patch, MagicMock
 
-from same.models import (
-    AdvancedModelManager, ModelType, ModelConfig, 
-    get_model_manager, MemoryMonitor
-)
-from same.models.exceptions import ModelLoadError, ModelNotFoundError
+try:
+    from same_search.models import (
+        get_model_manager, MemoryMonitor
+    )
+    # Try to import additional components that might exist
+    try:
+        from same_search.models import AdvancedModelManager, ModelType, ModelConfig
+    except ImportError:
+        AdvancedModelManager = None
+        ModelType = None
+        ModelConfig = None
+except ImportError:
+    # Fallback на старый импорт
+    from same.models import (
+        get_model_manager, MemoryMonitor
+    )
+    try:
+        from same.models import AdvancedModelManager, ModelType, ModelConfig
+    except ImportError:
+        AdvancedModelManager = None
+        ModelType = None
+        ModelConfig = None
+try:
+    from same_search.models.exceptions import ModelLoadError, ModelNotFoundError
+except ImportError:
+    # Fallback на старый импорт
+    from same.models.exceptions import ModelLoadError, ModelNotFoundError
 
 
 class TestAdvancedModelManager:

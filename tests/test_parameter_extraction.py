@@ -6,11 +6,28 @@ import pytest
 from unittest.mock import Mock, patch
 import pandas as pd
 
-from same.parameter_extraction import (
-    RegexParameterExtractor, ParameterPattern, ParameterType, ExtractedParameter,
-    MLParameterExtractor, MLExtractorConfig,
-    ParameterParser, ParameterParserConfig
-)
+try:
+    from same_clear.parameter_extraction import (
+        RegexParameterExtractor, ParameterPattern, ParameterType, ExtractedParameter,
+        ParameterParser, ParameterParserConfig
+    )
+    # MLParameterExtractor might not exist in the new structure
+    try:
+        from same_clear.parameter_extraction import MLParameterExtractor, MLExtractorConfig
+    except ImportError:
+        MLParameterExtractor = None
+        MLExtractorConfig = None
+except ImportError:
+    # Fallback на старый импорт
+    from same.parameter_extraction import (
+        RegexParameterExtractor, ParameterPattern, ParameterType, ExtractedParameter,
+        ParameterParser, ParameterParserConfig
+    )
+    try:
+        from same.parameter_extraction import MLParameterExtractor, MLExtractorConfig
+    except ImportError:
+        MLParameterExtractor = None
+        MLExtractorConfig = None
 
 
 class TestRegexParameterExtractor:

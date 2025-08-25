@@ -32,10 +32,56 @@ export interface InitializeRequest {
   similarity_threshold?: number;
 }
 
+export interface DatasetTopValue {
+  value: string | number | boolean | null;
+  count: number;
+}
+
+export interface DatasetPerColumnStats {
+  dtype: string;
+  non_null_count: number;
+  missing_count: number;
+  missing_pct: number;
+  unique_count: number;
+  top_values: DatasetTopValue[];
+}
+
+export interface DatasetStatistics {
+  total_rows: number;
+  columns: string[];
+  per_column: Record<string, DatasetPerColumnStats>;
+}
+
+export interface EngineStatistics {
+  is_ready: boolean;
+  catalog_size: number;
+  search_method: string;
+  similarity_threshold: number;
+  [key: string]: any;
+}
+
 export interface UploadResponse {
-  status: string;
-  message: string;
-  statistics?: Record<string, any>;
+  status: string; // queued | success | error | ...
+  message?: string;
+  task_id?: string;
+  state?: string;
+  ready?: boolean;
+  successful?: boolean;
+  error?: string;
+  statistics?: {
+    engine?: EngineStatistics;
+    dataset?: DatasetStatistics;
+    processing_report?: {
+      failed_count: number;
+      failed_rows: { code: string | number; name: string; error?: string }[];
+    } | null;
+    [key: string]: any;
+  } | Record<string, any>;
+  // Поля для расширенной синхронной обработки
+  output_csv_path?: string;
+  columns?: string[];
+  rows_preview?: Record<string, any>[];
+  preview_limit?: number;
 }
 
 export interface ExportResult {
@@ -73,4 +119,5 @@ export interface AppState {
   searchResults: SearchResult[];
   currentQuery: string;
   error: string | null;
+  uploadStatistics?: UploadResponse['statistics'];
 }

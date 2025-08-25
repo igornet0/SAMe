@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 import { Button, Input, Alert, LoadingSpinner } from './ui';
 import { SearchResult, SearchResponse, SearchRequest } from '../types/api';
+import { useI18n } from '../i18n';
 
 interface SearchInterfaceProps {
   catalogUploaded: boolean;
@@ -16,6 +17,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
   onSearchError,
   disabled = false
 }) => {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,23 +25,17 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
 
   const validateQuery = (searchQuery: string): string | null => {
     if (!searchQuery.trim()) {
-      return 'Please enter a product name to search for';
+      return t('search.validation.empty');
     }
     
     if (searchQuery.trim().length < 2) {
-      return 'Search query must be at least 2 characters long';
+      return t('search.validation.short');
     }
     
     return null;
   };
 
   const performSearch = async () => {
-    if (!catalogUploaded) {
-      const errorMsg = 'Please upload a catalog file before searching';
-      setError(errorMsg);
-      onSearchError(errorMsg);
-      return;
-    }
 
     const validationError = validateQuery(query);
     if (validationError) {
@@ -68,7 +64,38 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
       });
 
       if (!response.ok) {
+        // Автоинициализация при отсутствии движка
         const errorData = await response.json();
+        if (errorData?.detail === 'Search engine is not initialized') {
+          // Пытаемся инициализировать движок по тестовому датасету (или ранее загруженному файлу)
+          const initResp = await fetch('http://localhost:8000/search/initialize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              catalog_file_path: 'src/data/input/test_catalog_10000.csv',
+              search_method: searchMethod,
+              similarity_threshold: 0.6
+            })
+          });
+          if (!initResp.ok) {
+            const initErr = await initResp.json().catch(() => ({}));
+            throw new Error(initErr.detail || 'Failed to initialize search engine');
+          }
+          // Повторяем запрос поиска после успешной инициализации
+          const retry = await fetch('http://localhost:8000/search/search-analogs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(searchRequest),
+          });
+          if (!retry.ok) {
+            const retryErr = await retry.json().catch(() => ({}));
+            throw new Error(retryErr.detail || 'Search failed after initialization');
+          }
+          const retrResult: SearchResponse = await retry.json();
+          const retrQueryResults = retrResult.results[query.trim()] || [];
+          onSearchResults(retrQueryResults, query.trim());
+          return;
+        }
         throw new Error(errorData.detail || 'Search failed');
       }
 
@@ -119,20 +146,20 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
       {!catalogUploaded && (
         <Alert
           type="warning"
-          message="Please upload a catalog file first before searching for analogs"
+          message={t('search.alert.needUpload')}
         />
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         <div className="space-y-4 sm:space-y-6">
           <Input
-            label="Product Name"
-            placeholder="Enter product name (e.g., 'Болт М10х50')"
+            label={t('search.productName')}
+            placeholder={t('search.placeholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyPress={handleKeyPress}
             disabled={disabled || searching || !catalogUploaded}
-            helperText="Enter the name of the product you want to find analogs for"
+            helperText={t('search.helper')}
             aria-required="true"
             aria-describedby="product-name-help"
           />
@@ -142,7 +169,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
               htmlFor="search-method"
               className="block text-sm font-medium text-gray-700"
             >
-              Search Method
+              {t('search.method')}
             </label>
             <select
               id="search-method"
@@ -152,12 +179,15 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-describedby="search-method-help"
             >
-              <option value="hybrid">Hybrid (Recommended)</option>
-              <option value="semantic">Semantic Search</option>
-              <option value="fuzzy">Fuzzy Search</option>
+              <option value="hybrid">{t('search.method.hybrid')}</option>
+              <option value="semantic">{t('search.method.semantic')}</option>
+              <option value="fuzzy">{t('search.method.fuzzy')}</option>
+              <option value="token">{t('search.method.token')}</option>
+              <option value="hybrid_dbscan">{t('search.method.hybrid_dbscan')}</option>
+              <option value="optimized_dbscan">{t('search.method.optimized_dbscan')}</option>
             </select>
             <p id="search-method-help" className="text-sm text-gray-500">
-              Hybrid search combines semantic and fuzzy matching for best results
+              {t('search.method.help')}
             </p>
           </div>
         </div>
@@ -173,16 +203,16 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
             aria-describedby={!catalogUploaded ? "catalog-required" : undefined}
           >
             <Search className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-            {searching ? 'Searching...' : 'Search Analogs'}
+            {searching ? t('search.button.loading') : t('search.button')}
           </Button>
         </div>
       </form>
 
       {searching && (
         <div className="text-center py-8">
-          <LoadingSpinner size="lg" text="Searching for analogs..." />
+          <LoadingSpinner size="lg" text={t('search.loading')} />
           <p className="text-sm text-gray-500 mt-2">
-            This may take a few moments depending on catalog size
+            {t('search.loadingHint')}
           </p>
         </div>
       )}

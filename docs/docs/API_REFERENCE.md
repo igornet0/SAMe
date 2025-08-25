@@ -92,6 +92,43 @@ curl -X POST "http://localhost:8000/search/initialize" \
 
 ---
 
+### 2.1. Статус загрузки каталога (Celery)
+
+#### GET /search/upload-status/{task_id}
+
+Проверяет состояние фоновой задачи обработки каталога.
+
+Ответ:
+```json
+{
+  "task_id": "...",
+  "state": "SUCCESS|PENDING|FAILURE|...",
+  "ready": true,
+  "successful": true,
+  "message": "Processed successfully",
+  "statistics": {}
+}
+```
+
+---
+
+### 2.2. Активация моделей после фоновой обработки
+
+#### POST /search/activate-models/{task_id}
+
+Загружает сохранённые модели в процесс API после успешной фоновой обработки.
+
+Ответ:
+```json
+{
+  "status": "success",
+  "message": "Модели активированы",
+  "statistics": {}
+}
+```
+
+---
+
 ### 3. Загрузка каталога
 
 #### POST /search/upload-catalog

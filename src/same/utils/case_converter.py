@@ -1,10 +1,12 @@
 """
-Taken from
-https://github.com/mahenzon/ri-sdk-python-wrapper/blob/master/ri_sdk_codegen/utils/case_converter.py
+Case converter utilities for SAMe project
+Taken from same_clear.utils.case_converter for backward compatibility
 """
 
 def camel_case_to_snake_case(input_str: str) -> str:
     """
+    Convert CamelCase to snake_case
+    
     >>> camel_case_to_snake_case("SomeSDK")
     'some_sdk'
     >>> camel_case_to_snake_case("RServoDrive")

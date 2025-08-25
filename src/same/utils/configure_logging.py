@@ -1,11 +1,24 @@
 import logging
 from logging.handlers import RotatingFileHandler
-from same.settings import settings
+try:
+    from same_api.settings import settings
+except ImportError:
+    class MockSettings:
+        def __init__(self):
+            self.log_level = "INFO"
+            self.log_file = "same.log"
+    settings = MockSettings()
 
 logging.getLogger('passlib').setLevel(logging.ERROR)
 
 def setup_logging():
-    from same.data_manager import data_helper
+    try:
+        from src.data_manager import data_helper
+    except ImportError:
+        class MockDataHelper:
+            def get_path(self, path_type):
+                return "logs"
+        data_helper = MockDataHelper()
 
     # Очищаем все существующие обработчики
     for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDict]:

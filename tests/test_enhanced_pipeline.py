@@ -9,10 +9,26 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from same.text_processing.units_processor import UnitsProcessor, UnitsConfig
-from same.text_processing.synonyms_processor import SynonymsProcessor, SynonymsConfig
-from same.text_processing.tech_codes_processor import TechCodesProcessor, TechCodesConfig
-from same.text_processing.enhanced_preprocessor import EnhancedPreprocessor, EnhancedPreprocessorConfig
+try:
+    from same_clear.text_processing.units_processor import UnitsProcessor, UnitsConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.text_processing.units_processor import UnitsProcessor, UnitsConfig
+try:
+    from same_clear.text_processing.synonyms_processor import SynonymsProcessor, SynonymsConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.text_processing.synonyms_processor import SynonymsProcessor, SynonymsConfig
+try:
+    from same_clear.text_processing.tech_codes_processor import TechCodesProcessor, TechCodesConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.text_processing.tech_codes_processor import TechCodesProcessor, TechCodesConfig
+try:
+    from same_clear.text_processing.enhanced_preprocessor import EnhancedPreprocessor, EnhancedPreprocessorConfig
+except ImportError:
+    # Fallback на старый импорт
+    from same.text_processing.enhanced_preprocessor import EnhancedPreprocessor, EnhancedPreprocessorConfig
 
 
 class TestUnitsProcessor:

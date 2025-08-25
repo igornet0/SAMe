@@ -3,6 +3,8 @@ version: '3.8'
 services:
   # Основное приложение SAMe для разработки
   same-app-dev:
+    env_file:
+      - ../config/.env
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -18,6 +20,8 @@ services:
       - LOG_LEVEL=DEBUG
       - DATABASE_URL=postgresql+asyncpg://same_user:dev_password@same-db-dev:5432/same_dev_db
       - REDIS_URL=redis://same-redis-dev:6379/0
+      - RUN__CELERY_BROKER_URL=amqp://guest:guest@same-rabbitmq-dev:5672//
+      - RUN__CELERY_RESULT_BACKEND=redis://same-redis-dev:6379/0
       - API_RELOAD=true
       - ENABLE_HOT_RELOAD=true
       - ENABLE_PROFILING=true
@@ -25,23 +29,24 @@ services:
       - TRANSFORMERS_CACHE=/app/models/transformers
       - SENTENCE_TRANSFORMERS_HOME=/app/models/sentence_transformers
     volumes:
-      - ../:/app  # Монтируем весь проект для hot reload
+      - ../src:/app/src  # Монтируем только исходный код
+      - ../config:/app/config  # Монтируем конфигурацию
+      - ../scripts:/app/scripts  # Монтируем скрипты
+      - ../alembic.ini:/app/alembic.ini  # Монтируем alembic конфиг
       - same-dev-data:/app/data
       - same-dev-models:/app/models
       - same-dev-cache:/app/cache
       - same-dev-logs:/app/logs
       - same-dev-matplotlib:/tmp/matplotlib
-      - /app/__pycache__  # Исключаем кэш Python
-      - /app/.venv  # Исключаем виртуальное окружение
-      - /app/.pytest_cache
     depends_on:
       - same-db-dev
       - same-redis-dev
+      - same-rabbitmq-dev
     networks:
       - same-dev-network
     command: >
       sh -c "
-        /app/.venv/bin/uvicorn same.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload --log-level debug --factory
+        /app/.venv/bin/uvicorn same_api.api.create_app:create_app --host 0.0.0.0 --port 8000 --reload --log-level debug --factory
       "
 
   # База данных PostgreSQL для разработки
@@ -73,6 +78,22 @@ services:
       - "6380:6379"  # Другой порт
     networks:
       - same-dev-network
+
+  # RabbitMQ для разработки
+  same-rabbitmq-dev:
+    image: rabbitmq:3-management-alpine
+    container_name: same-rabbitmq-dev
+    restart: unless-stopped
+    ports:
+      - "5673:5672"  # другой порт, чтобы не конфликтовать
+      - "15673:15672"
+    networks:
+      - same-dev-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Jupyter для экспериментов
   # same-jupyter:
@@ -153,7 +174,10 @@ services:
       - ENVIRONMENT=testing
       - TEST_DATABASE_URL=postgresql+asyncpg://same_user:dev_password@same-db-dev:5432/same_test_db
     volumes:
-      - ../:/app
+      - ../src:/app/src
+      - ../tests:/app/tests
+      - ../config:/app/config
+      - ../pyproject.toml:/app/pyproject.toml
       - same-dev-test-data:/app/tests/data
     depends_on:
       - same-db-dev
@@ -166,6 +190,25 @@ services:
       "
 
   # Frontend React приложение для разработки
+
+  # Celery worker (dev)
+  same-celery-worker-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: same-celery-worker-dev
+    restart: unless-stopped
+    environment:
+      - RUN__CELERY_BROKER_URL=amqp://guest:guest@same-rabbitmq-dev:5672//
+      - RUN__CELERY_RESULT_BACKEND=redis://same-redis-dev:6379/0
+    depends_on:
+      - same-rabbitmq-dev
+      - same-redis-dev
+    networks:
+      - same-dev-network
+    command: >
+      sh -c "celery -A same_api.api.configuration.tasks.celery_app.celery_app worker -l info"
   same-frontend-dev:
     build:
       context: ../frontend/same-frontend

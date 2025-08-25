@@ -13,8 +13,10 @@ class ApiClient {
   private maxRetries: number = 3;
   private retryDelay: number = 1000; // 1 second
 
-  constructor(baseURL: string = 'http://localhost:8000') {
-    this.baseURL = baseURL;
+  constructor(baseURL?: string) {
+    const envBaseURL = process.env.REACT_APP_API_BASE_URL;
+    // Default to relative base URL for CRA dev proxy to avoid CORS
+    this.baseURL = baseURL ?? envBaseURL ?? '';
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: 30000, // 30 seconds
@@ -121,6 +123,14 @@ class ApiClient {
         },
         timeout: 60000, // 1 minute for file upload
       });
+      return response.data;
+    });
+  }
+
+  // Get upload status by task id
+  async getUploadStatus(taskId: string): Promise<UploadResponse> {
+    return this.retryRequest(async () => {
+      const response = await this.client.get(`/search/upload-status/${encodeURIComponent(taskId)}`);
       return response.data;
     });
   }

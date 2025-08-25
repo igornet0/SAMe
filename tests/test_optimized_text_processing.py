@@ -8,9 +8,15 @@ import time
 from unittest.mock import Mock, patch
 from typing import List, Dict, Any
 
-from src.same.text_processing import TextPreprocessor, PreprocessorConfig
-from src.same.text_processing.lemmatizer import Lemmatizer, LemmatizerConfig
-from src.same.text_processing.interfaces import TextPreprocessorInterface
+try:
+    from same_clear.text_processing import TextPreprocessor, PreprocessorConfig
+    from same_clear.text_processing import Lemmatizer, LemmatizerConfig
+    from same_core.interfaces import TextProcessorInterface as TextPreprocessorInterface
+except ImportError:
+    # Fallback imports
+    from same.text_processing import TextPreprocessor, PreprocessorConfig
+    from same.text_processing.lemmatizer import Lemmatizer, LemmatizerConfig
+    from same.text_processing.interfaces import TextPreprocessorInterface
 
 
 class TestOptimizedLemmatizer:

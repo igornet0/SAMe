@@ -93,7 +93,7 @@ def cmd_server(args):
         print("🔄 Auto-reload enabled")
     
     uvicorn.run(
-        "same.api.create_app:create_app",
+        "same_api.api.create_app:create_app",
         host=args.host,
         port=args.port,
         reload=args.reload,
