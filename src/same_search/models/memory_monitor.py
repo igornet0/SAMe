@@ -32,6 +32,7 @@ class MemoryMonitor:
                  memory_limit_gb: float = 8.0,
                  warning_threshold: float = 0.8,
                  cleanup_threshold: float = 0.9,
+                 critical_threshold: float = 1.0,
                  monitoring_interval: float = 30.0):
         """
         Args:
@@ -43,6 +44,7 @@ class MemoryMonitor:
         self.memory_limit_gb = memory_limit_gb
         self.warning_threshold = warning_threshold
         self.cleanup_threshold = cleanup_threshold
+        self.critical_threshold = critical_threshold
         self.monitoring_interval = monitoring_interval
         
         self._lock = threading.RLock()
@@ -166,7 +168,13 @@ class MemoryMonitor:
                 usage_ratio = stats.used_memory / self.memory_limit_gb
                 
                 # Проверяем пороги
-                if usage_ratio >= self.cleanup_threshold:
+                if usage_ratio >= self.critical_threshold:
+                    logger.error(f"Memory usage CRITICAL: {usage_ratio:.1%} of limit - forcing emergency cleanup")
+                    self.force_cleanup()
+                    # Дополнительная очистка при критическом уровне
+                    import gc
+                    gc.collect()
+                elif usage_ratio >= self.cleanup_threshold:
                     logger.warning(f"Memory usage critical: {usage_ratio:.1%} of limit")
                     self.force_cleanup()
                 elif usage_ratio >= self.warning_threshold:

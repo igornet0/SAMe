@@ -31,6 +31,7 @@ try:
     from src.same_clear.text_processing.tokenizer import Tokenizer
     from src.same_clear.parameter_extraction.regex_extractor import RegexParameterExtractor
     from src.data_manager import data_helper
+    from src.same_api import settings
     SAME_MODULES_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: SAMe modules not available. Missing: {e}")
@@ -59,7 +60,7 @@ log_dir.mkdir(exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format=settings.logging.format,
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler(log_dir / 'excel_processor_advanced.log')
