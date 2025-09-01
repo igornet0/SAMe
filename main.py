@@ -372,7 +372,7 @@ class DuplicateAnalogProcessor:
             results = await self.search_engine.process_catalog(self.processed_df)
         
         # Обновление DataFrame с результатами дубликатов
-        for dup_result in results['duplicates']:
+        for dup_result in results.get('duplicates', []):
             if isinstance(dup_result, dict):
                 main_index = dup_result.get('main_index', 0)
                 duplicate_indices = dup_result.get('duplicate_indices', [])
@@ -387,17 +387,17 @@ class DuplicateAnalogProcessor:
             for dup_idx in duplicate_indices:
                 self.processed_df.loc[dup_idx, 'duplicate_count'] = -1
         
-        self.duplicate_groups = results['duplicates']
-        self.analog_groups = results['analogs']
+        self.duplicate_groups = results.get('duplicates', [])
+        self.analog_groups = results.get('analogs', [])
         
         # Создаем простые деревья для мульти-движкового поиска
-        if (use_multi_engine or use_improved) and not results['trees']:
+        if (use_multi_engine or use_improved) and not results.get('trees'):
             self.product_trees = self._create_simple_trees_from_analogs()
         else:
-            self.product_trees = results['trees']
+            self.product_trees = results.get('trees', [])
         
-        logger.info(f"Found {len(results['duplicates'])} duplicate groups and {len(results['analogs'])} analog groups")
-        return results['duplicates'], results['analogs']
+        logger.info(f"Found {len(self.duplicate_groups)} duplicate groups and {len(self.analog_groups)} analog groups")
+        return self.duplicate_groups, self.analog_groups
     
     def _create_simple_trees_from_analogs(self) -> List[Dict[str, Any]]:
         """Создание оптимизированных деревьев из результатов аналогов"""
@@ -735,14 +735,14 @@ async def generate_search_trees(input_file: str, similarity_threshold: float, ma
             )
             
             # Сохраняем результаты пакетной обработки
-            processor.processed_df = batch_results['final_processed_df']
-            processor.duplicate_groups = batch_results['duplicate_groups']
-            processor.analog_groups = batch_results['analog_groups']
+            processor.processed_df = batch_results.get('final_processed_df', pd.DataFrame())
+            processor.duplicate_groups = batch_results.get('duplicate_groups', [])
+            processor.analog_groups = batch_results.get('analog_groups', [])
             
             # Создаем простые деревья
             processor.product_trees = processor._create_simple_trees_from_analogs()
             
-            logger.info(f"Batch processing completed. Found {len(batch_results['duplicate_groups'])} duplicate groups and {len(batch_results['analog_groups'])} analog groups")
+            logger.info(f"Batch processing completed. Found {len(processor.duplicate_groups)} duplicate groups and {len(processor.analog_groups)} analog groups")
             
             # Сохранение результатов
             output_dir = Path("src/data/output")

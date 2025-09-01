@@ -35,6 +35,7 @@ class BatchProcessor:
             batch_df = df.iloc[start_idx:end_idx].copy()
             
             # Добавляем информацию о пакете
+            batch_df = batch_df.copy()
             batch_df['_batch_start'] = start_idx
             batch_df['_batch_end'] = end_idx
             batch_df['_batch_id'] = start_idx // (self.batch_size - self.overlap_size)
@@ -45,7 +46,17 @@ class BatchProcessor:
                           similarity_threshold: float = 0.3) -> Dict[str, Any]:
         """Обработка одного пакета"""
         try:
-            logger.info(f"Processing batch {batch_df['_batch_id'].iloc[0]} "
+            # Получаем batch_id безопасным способом
+            try:
+                batch_id = batch_df.get('_batch_id', pd.Series([0])).iloc[0]
+                batch_start = batch_df.get('_batch_start', pd.Series([0])).iloc[0]
+                batch_end = batch_df.get('_batch_end', pd.Series([0])).iloc[0]
+            except (IndexError, KeyError, AttributeError):
+                batch_id = 0
+                batch_start = 0
+                batch_end = len(batch_df)
+            
+            logger.info(f"Processing batch {batch_id} "
                        f"({len(batch_df)} records)")
             
             # Обработка пакета
@@ -58,22 +69,34 @@ class BatchProcessor:
             gc.collect()
             
             return {
-                'batch_id': batch_df['_batch_id'].iloc[0],
-                'batch_start': batch_df['_batch_start'].iloc[0],
-                'batch_end': batch_df['_batch_end'].iloc[0],
+                'batch_id': batch_id,
+                'batch_start': batch_start,
+                'batch_end': batch_end,
                 'duplicate_groups': duplicate_groups,
                 'analog_groups': analog_groups,
+                'trees': [],
                 'processed_df': batch_df
             }
-            
+        
         except Exception as e:
-            logger.error(f"Error processing batch {batch_df['_batch_id'].iloc[0]}: {e}")
+            # Получаем batch_id безопасным способом
+            try:
+                batch_id = batch_df.get('_batch_id', pd.Series([0])).iloc[0]
+                batch_start = batch_df.get('_batch_start', pd.Series([0])).iloc[0]
+                batch_end = batch_df.get('_batch_end', pd.Series([0])).iloc[0]
+            except (IndexError, KeyError, AttributeError):
+                batch_id = 0
+                batch_start = 0
+                batch_end = len(batch_df)
+            
+            logger.error(f"Error processing batch {batch_id}: {e}")
             return {
-                'batch_id': batch_df['_batch_id'].iloc[0],
-                'batch_start': batch_df['_batch_start'].iloc[0],
-                'batch_end': batch_df['_batch_end'].iloc[0],
+                'batch_id': batch_id,
+                'batch_start': batch_start,
+                'batch_end': batch_end,
                 'duplicate_groups': [],
                 'analog_groups': [],
+                'trees': [],
                 'processed_df': batch_df,
                 'error': str(e)
             }
@@ -98,12 +121,45 @@ class BatchProcessor:
         
         logger.info(f"Created {total_batches} batches for processing")
         
+        # Проверяем, что пакеты созданы корректно
+        if total_batches == 0:
+            logger.warning("No batches created, returning empty results")
+            return {
+                'duplicate_groups': [],
+                'analog_groups': [],
+                'final_processed_df': df,
+                'batch_stats': []
+            }
+        
         # Обрабатываем пакеты с ограничением параллельности
         semaphore = asyncio.Semaphore(max_concurrent_batches)
         
         async def process_with_semaphore(batch_df):
-            async with semaphore:
-                return await self.process_batch(batch_df, processor, similarity_threshold)
+            try:
+                async with semaphore:
+                    return await self.process_batch(batch_df, processor, similarity_threshold)
+            except Exception as e:
+                logger.error(f"Error in process_with_semaphore: {e}")
+                # Получаем batch_id безопасным способом
+                try:
+                    batch_id = batch_df.get('_batch_id', pd.Series([0])).iloc[0]
+                    batch_start = batch_df.get('_batch_start', pd.Series([0])).iloc[0]
+                    batch_end = batch_df.get('_batch_end', pd.Series([0])).iloc[0]
+                except (IndexError, KeyError, AttributeError):
+                    batch_id = 0
+                    batch_start = 0
+                    batch_end = len(batch_df)
+                
+                return {
+                    'batch_id': batch_id,
+                    'batch_start': batch_start,
+                    'batch_end': batch_end,
+                    'duplicate_groups': [],
+                    'analog_groups': [],
+                    'trees': [],
+                    'processed_df': batch_df,
+                    'error': str(e)
+                }
         
         # Обрабатываем пакеты
         tasks = [process_with_semaphore(batch) for batch in batches]
@@ -114,17 +170,26 @@ class BatchProcessor:
             try:
                 result = await task
                 
+                # Проверяем, что результат валиден
+                if not isinstance(result, dict):
+                    logger.warning(f"Invalid result type: {type(result)}")
+                    continue
+                
+                # Проверяем наличие ошибки в результате
+                if result.get('error'):
+                    logger.warning(f"Batch {result.get('batch_id', 'unknown')} had error: {result.get('error')}")
+                
                 # Собираем результаты
-                all_results['duplicate_groups'].extend(result['duplicate_groups'])
-                all_results['analog_groups'].extend(result['analog_groups'])
-                all_results['processed_data'].append(result['processed_df'])
+                all_results['duplicate_groups'].extend(result.get('duplicate_groups', []))
+                all_results['analog_groups'].extend(result.get('analog_groups', []))
+                all_results['processed_data'].append(result.get('processed_df', pd.DataFrame()))
                 
                 # Статистика пакета
                 batch_stats = {
-                    'batch_id': result['batch_id'],
-                    'records_processed': len(result['processed_df']),
-                    'duplicates_found': len(result['duplicate_groups']),
-                    'analogs_found': len(result['analog_groups']),
+                    'batch_id': result.get('batch_id', 0),
+                    'records_processed': len(result.get('processed_df', pd.DataFrame())),
+                    'duplicates_found': len(result.get('duplicate_groups', [])),
+                    'analogs_found': len(result.get('analog_groups', [])),
                     'error': result.get('error')
                 }
                 all_results['batch_stats'].append(batch_stats)
@@ -138,19 +203,24 @@ class BatchProcessor:
         
         # Объединяем все обработанные данные
         if all_results['processed_data']:
-            all_results['final_processed_df'] = pd.concat(
-                all_results['processed_data'], ignore_index=True
-            )
-            # Удаляем служебные колонки
-            all_results['final_processed_df'] = all_results['final_processed_df'].drop(
-                columns=['_batch_start', '_batch_end', '_batch_id'], errors='ignore'
-            )
+            try:
+                all_results['final_processed_df'] = pd.concat(
+                    all_results['processed_data'], ignore_index=True
+                )
+                # Удаляем служебные колонки
+                all_results['final_processed_df'] = all_results['final_processed_df'].drop(
+                    columns=['_batch_start', '_batch_end', '_batch_id'], errors='ignore'
+                )
+            except Exception as e:
+                logger.error(f"Error concatenating processed data: {e}")
+                all_results['final_processed_df'] = pd.DataFrame()
         else:
             all_results['final_processed_df'] = pd.DataFrame()
         
         logger.info(f"Batch processing completed. "
                    f"Total duplicates: {len(all_results['duplicate_groups'])}, "
-                   f"Total analogs: {len(all_results['analog_groups'])}")
+                   f"Total analogs: {len(all_results['analog_groups'])}, "
+                   f"Batches with errors: {len([b for b in all_results['batch_stats'] if b.get('error')])}")
         
         return all_results
     
